@@ -17,6 +17,20 @@ BaseDatos <- fread("C:\\Users\\nico2\\Documents\\Proyecto_Corrupci?nSalud\\Limpi
 #ESCRITURA DE ARCHIVOS----
 write.csv(BaseDatos, "C:\\Users\\nico2\\Documents\\Proyecto_Corrupci?nSalud\\SECOP_I_IPS.CSV")
 
+#Funciones----
+    limpiarNumero <- function(bloques){
+      valor <- "Invalido"
+      if (nrow(bloques) >= 1){
+        for (i in 1:nrow(bloques)){
+          bloque <- as.numeric(bloques[i])
+          if (is.numeric(bloque) & (bloque/100000 > 1) & (!is.na(bloque))){
+            valor <- bloque
+          }
+        }
+      }
+      return(valor)
+    }
+
 #INFORMACI?N DE LOS DATOS----
 {
 #busqueda del documento 8000065831
@@ -422,9 +436,7 @@ BaseDatos[grep("8000065831",BaseDatos$id_contratista),
             "fecha_fin_ejec","compromiso_presupuestal","valor_inicial","valor_adiciones",
             "valor_total","objeto_contrato_firma","id_origen_recursos","origen_recursos",
             "codigo_bpin","proponentes_selecc","calificacion_definitiva","id_sub_unid_ejec",
-            "nombre_sub_unid_ejec","moneda","post_conflicto","ruta_web", "nivel_entidad_2",
-            "orden_entidad_2","tipo_id_contratista_2", "id_contratista_2","nom_contratista_2",
-            "plazo_ejec_calc", "plazo_ejec_dias")
+            "nombre_sub_unid_ejec","moneda","post_conflicto","ruta_web")
   names(BaseDatos) <- nombres
 
 
@@ -624,20 +636,6 @@ BaseDatos[grep("8000065831",BaseDatos$id_contratista),
     #Eliminaci?n de columnas
     BaseDatos$V1 <- NULL #Variable generada automaticamente
     BaseDatos$Tipo Identifi del Contratista <- NULL
-    
-#Funciones----
-    limpiarNumero <- function(bloques){
-      valor <- "Invalido"
-      if (nrow(bloques) >= 1){
-        for (i in 1:nrow(bloques)){
-          bloque <- as.numeric(bloques[i])
-          if (is.numeric(bloque) & (bloque/100000 > 1) & (!is.na(bloque))){
-            valor <- bloque
-          }
-        }
-      }
-      return(valor)
-    }
     
 # Comentario    
   nom_contratista <- BaseDatos %>% group_by(id_contratista) %>% summarise(Dist = n_distinct(nom_contratista))
