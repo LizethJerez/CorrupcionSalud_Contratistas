@@ -10,32 +10,256 @@ library(lubridate)
 library(plotly)
 library(DT)
 #LECTURA DE ARCHIVOS----
-BaseDatos <- fread("C:\\Users\\nico2\\Documents\\Proyecto_Corrupci?nSalud\\SECOP_I_IPS.CSV")
-BaseDatos <- fread("C:\\Users\\nico2\\Documents\\Proyecto_Corrupci?nSalud\\LimpiezaDatos\\SECOP_I_IPS.CSV",
+BaseDatos <- fread("C:\\Users\\nico2\\Documents\\Proyecto_CorrupcionSalud\\SECOP_I_IPS.CSV")
+BaseDatos <- fread("C:\\Users\\nico2\\Documents\\Proyecto_CorrupcionSalud\\LimpiezaDatos\\SECOP_I_IPS.CSV",
                    encoding = "UTF-8")   #GENERAL
 
 #ESCRITURA DE ARCHIVOS----
-write.csv(BaseDatos, "C:\\Users\\nico2\\Documents\\Proyecto_Corrupci?nSalud\\SECOP_I_IPS.CSV")
+write.csv(BaseDatos, "C:\\Users\\nico2\\Documents\\Proyecto_CorrupcionSalud\\SECOP_I_IPS.CSV")
 
-#Funciones----
-    limpiarNumero <- function(bloques){
-      valor <- "Invalido"
-      if (nrow(bloques) >= 1){
-        for (i in 1:nrow(bloques)){
-          bloque <- as.numeric(bloques[i])
-          if (is.numeric(bloque) & (bloque/100000 > 1) & (!is.na(bloque))){
-            valor <- bloque
-          }
-        }
+#FUNCIONES----
+limpiarNumero <- function(bloques){
+  valor <- "Invalido"
+  if (nrow(bloques) >= 1){
+    for (i in 1:nrow(bloques)){
+      bloque <- as.numeric(bloques[i])
+      if (is.numeric(bloque) & (bloque/100000 > 1) & (!is.na(bloque))){
+        valor <- bloque
       }
-      return(valor)
     }
+  }
+  return(valor)
+}
 
-#INFORMACI?N DE LOS DATOS----
+#MODIFICACIONES DE LA BASE DE DATOS-----
+
+#Ordenar
+BaseDatos <- BaseDatos[order(id_contratista_2)]
+
+#General
+
+BaseDatos <- distinct(BaseDatos)
+nombres = c("uid","anno_cargue","anno_firma","nivel_entidad","orden_entidad",
+            "nombre_entidad","nit_entidad","cod_entidad","id_tipo_proceso",
+            "tipo_proceso","estado_proceso","causal_cont_direct","id_reg_contrat",
+            "regimen_contratacion","id_objeto","objeto_contratar","detalle_objeto",
+            "tipo_contrato","municipio_obtencion","municipio_entrega",
+            "municipio_ejecucion","fecha_cargue","numero_constancia","numero_proceso",
+            "numero_contrato","valor_estimado","id_grupo","nombre_grupo","id_familia",
+            "nombre_familia","id_clase","nombre_clase","id_adjudicacion","tipo_id_contratista",
+            "id_contratista","nom_contratista","departamento_contratista",
+            "tipo_id_rep_legal","id_rep_legal","nombre_rep_legal","fecha_firma",
+            "fecha_ini_ejec","plazo_ejec","rango_ejec","adiciones_dias","adiciones_meses",
+            "fecha_fin_ejec","compromiso_presupuestal","valor_inicial","valor_adiciones",
+            "valor_total","objeto_contrato_firma","id_origen_recursos","origen_recursos",
+            "codigo_bpin","proponentes_selecc","calificacion_definitiva","id_sub_unid_ejec",
+            "nombre_sub_unid_ejec","moneda","post_conflicto","ruta_web")
+names(BaseDatos) <- nombres
+
+
+
+#Conversi?n de variables
+
+#2. anno_cargue
+#Se retiran los registros que presenten que el anno del cargue es mayor al anno de firma
+BaseDatos <- BaseDatos %>% filter(!(anno_cargue > anno_firma))
+
+#Eliminaci?n de los datos anteriores al anno 2014 y los que no contienen la mayoria de datos
+BaseDatos <- BaseDatos[ anno_cargue >= 2014 &
+                          anno_firma >= 2014]
+
+#3. anno_firma
+#Se retiran los registros que presenten anno de forma nulo
+BaseDatos <- BaseDatos %>% filter(!(is.na(anno_firma)))
+
+#4. nivel_entidad
+BaseDatos[, nivel_entidad_2:= ifelse(nivel_entidad== "NACIONAL", "N", "T")]
+BaseDatos[, nivel_entidad_2:= factor(nivel_entidad_2)]
+
+#5. orden_entidad
+for (i in 1:1105606){
+  BaseDatos[i, orden_entidad_2:= switch(orden_entidad, 
+                                        "NACIONAL CENTRALIZADO" = "NC",
+                                        "NACIONAL DESCENTRALIZADO" = "ND",
+                                        "TERRITORIAL DEPARTAMENTAL CENTRALIZADO" = "TDC",
+                                        "TERRITORIAL DEPARTAMENTAL DESCENTRALIZADO" = "TDD",
+                                        "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 1" = "TDMN1",
+                                        "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 2" = "TDMN2",
+                                        "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 3" = "TDMN3",
+                                        "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 4" = "TDMN4",
+                                        "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 5" = "TDMN5",
+                                        "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 6" = "TDMN6")]}
+BaseDatos[, orden_entidad_2:= factor(orden_entidad_2)]
+
+#9. id Tipo de proceso
+BaseDatos[ , id_tipo_proceso:= factor(id_tipo_proceso)]
+
+#10. Tipo de Proceso
+BaseDatos[ , tipo_proceso:= factor(tipo_proceso)]
+
+#11. Estado del Proceso
+BaseDatos[ , estado_proceso:= factor(estado_proceso)]
+
+#13. ID Regimen de Contratacion
+BaseDatos[ , id_reg_contrat:= factor(id_reg_contrat)]
+
+#14. Regimen de Contratacion
+BaseDatos[ , regimen_contratacion:= factor(regimen_contratacion)]
+
+#15. ID Objeto a Contratar
+BaseDatos[ , id_objeto:= factor(id_objeto)]
+
+#16. Objeto a Contratar
+BaseDatos[ , objeto_contratar:= factor(objeto_contratar)]
+
+#17. detalle_objeto
+# Se retiran los datos que presenten la observaci?n de anuar esfuerzos o similares
+BaseDatos <-  BaseDatos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"aunar esfuerzos") |
+             str_detect(str_to_lower(detalle_objeto),"anuar esfuerzos") |
+             str_detect(str_to_lower(detalle_objeto),"aunar espuerzos")))
+# Se retiran los datos que presenten la observaci?n de empr?stitos
+BaseDatos <-  BaseDatos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"empr?stito") |
+             str_detect(str_to_lower(detalle_objeto),"emprestito") |
+             str_detect(str_to_lower(detalle_objeto),"empresito")))
+
+#18. tipo_contrato
+# Se retiran los contratos de tipo 'cr?dito', 'Fiducia', 'Comodato' y 'Arrendamiento'
+BaseDatos$tipo_contrato <- as.factor(BaseDatos$tipo_contrato)
+BaseDatos <- BaseDatos %>% 
+  filter(!(tipo_contrato == "Cr?dito" | tipo_contrato == "Fiducia" | 
+             tipo_contrato == "Comodato" | tipo_contrato == "Arrendamiento"))
+
+#26. ID Grupo
+BaseDatos[ , id_grupo:= as.character(id_grupo)]
+
+#27. Nombre Grupo
+BaseDatos[ , nombre_grupo:= factor(nombre_grupo)]
+
+#34. Tipo Identifi del Contratista*
+BaseDatos[,tipo_id_contratista_2 := ifelse(tipo_id_contratista == "No Definido",NA,
+                                           tipo_id_contratista)] #NA
+BaseDatos[ , tipo_id_contratista_2:= factor(tipo_id_contratista_2)]
+
+#35. Identificacion del Contratista
+BaseDatos[,id_contratista_2:= ifelse(id_contratista=="No Definido",NA,
+                                     id_contratista)]
+BaseDatos[, id_contratista_2:= gsub(":","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("\\$","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("\\.","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("?","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("?","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("?","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("?","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("/","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("|","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= as.numeric(id_contratista_2)]
+
+#??AVISO!! Primero se necesita ordenar los datos por Iden_Contratista y tranformarlos en caracteres
+BaseDatos <- BaseDatos[order(id_contratista_2)]
+BaseDatos[, id_contratista_2:= as.character(id_contratista_2)]
+BaseDatos[c(955677:955793),id_contratista_2:= ifelse(id_contratista=="No Definido",NA,
+                                                     id_contratista)]
+
+for (j in 835590:955793){
+  if(!is.na(BaseDatos[j, id_contratista_2])){
+    
+    x <- BaseDatos[j, strsplit(id_contratista_2, split = '-') ]
+    y <- limpiarNumero(x)
+    
+    if (y == "Invalido"){
+      x <- BaseDatos[j, strsplit(id_contratista_2, split = ' ') ]
+      y <- limpiarNumero(x)
+    }
+    if (y == "Invalido"){
+      x <- BaseDatos[j, strsplit(id_contratista_2, split = 'd') ]
+      y <- limpiarNumero(x)
+    }
+    if (y == "Invalido"){
+      x <- BaseDatos[j, strsplit(id_contratista_2, split = 'D') ]
+      y <- limpiarNumero(x)
+    }
+    BaseDatos[j, id_contratista_2:= y]
+  }
+}
+
+#El ?ltimo grupo que tiene probemas es porque hay espacios entre los n?meros
+BaseDatos[, id_contratista_2:= gsub(" ","", BaseDatos$id_contratista_2)]
+BaseDatos[, id_contratista_2:= gsub("-","", BaseDatos$id_contratista_2)]
+
+# Resmen de los valores da?ados
+valorresIncorrectos <- BaseDatos[grep("Invalido",BaseDatos$id_contratista_2), 
+                                 c( "id_contratista", "nom_contratista")]
+
+valorresIncorrectos <- BaseDatos[c(955677:955793),
+                                 c("tipo_id_contratista_2","id_contratista", "id_contratista_2")]
+BaseDatos[is.na(id_contratista_2), sum(valor_total)]
+
+
+#36. Nom Raz Social Contratista
+BaseDatos[,nom_contratista_2:= ifelse(nom_contratista=="No Definido",NA,
+                                      nom_contratista)]
+
+#38. Tipo Doc Representante Legal
+BaseDatos[ , tipo_id_rep_legal:= factor(tipo_id_rep_legal)]
+
+#42. fecha_ini_ejec
+BaseDatos$fecha_ini_ejec <- dmy(BaseDatos$fecha_ini_ejec)
+
+#43. plazo_ejec
+BaseDatos$plazo_ejec <- as.integer(BaseDatos$plazo_ejec)
+
+#44. Rango de Ejec del Contrato
+BaseDatos[ , rango_ejec:= factor(rango_ejec)]
+
+#47. fecha_fin_ejec
+BaseDatos$fecha_fin_ejec <- dmy(BaseDatos$fecha_fin_ejec)
+
+#53. ID Origen de los Recursos
+BaseDatos[ , id_origen_recursos:= factor(id_origen_recursos)]
+
+#54. Origen de los Recursos
+BaseDatos[ , origen_recursos:= factor(origen_recursos)]
+
+#60. moneda
+
+#Eliminaci?n de los datos anteriores al anno 2014 y los que no contienen la mayoria de datos
+BaseDatos <- BaseDatos[moneda %in% c("Pesos (COP)", "Dolares (US)")]
+# Adicionalmente, se eliminan los datos que tienen valores menores a los 10 mil pesos colombianos
+BaseDatos <- BaseDatos[!(moneda == "Pesos (COP)" &
+                           valor_inicial <= 10000 | 
+                           valor_total < 10000)]
+# Adicionalmente, se eliminan los datos que tienen valores menores a los 10 dolares
+BaseDatos <- BaseDatos[!(moneda == "Dolares (US)" &
+                           valor_inicial <= 10 | 
+                           valor_total < 10)]
+
+#--67. plazo_ejec_calc
+BaseDatos$plazo_ejec_calc <- BaseDatos$fecha_fin_ejec - BaseDatos$fecha_ini_ejec
+BaseDatos$plazo_ejec_calc <- as.integer(BaseDatos$plazo_ejec_calc)
+
+# Se retiran los datos que no sean coherentes en el plazo de ejecuci?n
+BaseDatos <- BaseDatos %>% filter(!is.na(plazo_ejec_calc)) 
+
+#--68. plazo_ejec_dias
+BaseDatos <- data.table(BaseDatos)
+
+BaseDatos[,plazo_ejec_dias := ifelse(
+  rango_ejec == "D", plazo_ejec, 
+  ifelse(rango_ejec == "M", plazo_ejec*30, NA
+  ))]
+
+#Eliminaci?n de columnas
+BaseDatos$V1 <- NULL #Variable generada automaticamente
+BaseDatos$tipo_id_contratista <- NULL
+
+
+#INFORMACION DE LOS DATOS----
 {
 #busqueda del documento 8000065831
-BaseDatos[grep("8000065831",BaseDatos$id_contratista), 
-          c("TipoInden_Contratista","Identificacion del Contratista", "id_contratista", "Nom_Contratista")] 
+BaseDatos[grep("8000065831",BaseDatos$id_contratista_2), 
+          c("tipo_id_contratista_2","id_contratista", "id_contratista_2", "Nom_Contratista")] 
 
 #I. Atributos----
   # Un '*' significa que el atributo fue reemplazado para mejorar su lectura
@@ -44,19 +268,19 @@ BaseDatos[grep("8000065831",BaseDatos$id_contratista),
     BaseDatos[c(101:200), "uid"]
     sum(BaseDatos$uid=="No Definido") #No hay valores con "No Definido"
     sum(is.na(BaseDatos$uid)) # No hay valores nulos
-  } #1. C?digo uid
+  } #1. Codigo uid
   { 
-    BaseDatos[c(1:15), "a?o_cargue"]
-    sum(BaseDatos$a?o_cargue=="No Definido") #No hay valores con "No Definido"
-    sum(is.na(BaseDatos$a?o_cargue)) # No hay valores nulos
-    table(BaseDatos$a?o_cargue)
-  } #2. A?o de cargue en SECOP
+    BaseDatos[c(1:15), "anno_cargue"]
+    sum(BaseDatos$anno_cargue=="No Definido") #No hay valores con "No Definido"
+    sum(is.na(BaseDatos$anno_cargue)) # No hay valores nulos
+    table(BaseDatos$anno_cargue)
+  } #2. Anno de cargue en SECOP
   {
-    BaseDatos[c(1:15), "a?o_firma"]
-    sum(BaseDatos$a?o_firma=="No Definido") #No hay valores con "No Definido"
-    sum(is.na(BaseDatos$a?o_firma)) # No hay valores nulos
-    table(BaseDatos$a?o_firma)
-  } #3. A?o del firma del contrato
+    BaseDatos[c(1:15), "anno_firma"]
+    sum(BaseDatos$anno_firma=="No Definido") #No hay valores con "No Definido"
+    sum(is.na(BaseDatos$anno_firma)) # No hay valores nulos
+    table(BaseDatos$anno_firma)
+  } #3. Anno del firma del contrato
   {
     BaseDatos[c(1:15),"nivel_entidad"]
     sum(BaseDatos$nivel_entidad=="No Definido") #No hay valores con "No Definido"
@@ -71,6 +295,7 @@ BaseDatos[grep("8000065831",BaseDatos$id_contratista),
     BaseDatos[c(1:15), "orden_entidad"]
     sum(BaseDatos$orden_entidad=="No Definido") #No hay valores con "No Definido"
     sum(is.na(BaseDatos$orden_entidad)) # No hay valores nulos
+    --#66. orden_entidad_2
     table(BaseDatos$orden_entidad, BaseDatos$orden_entidad_2)
     BaseDatos[, orden_entidad_2]
   } #5. orden_entidad
@@ -79,7 +304,7 @@ BaseDatos[grep("8000065831",BaseDatos$id_contratista),
     sum(BaseDatos$nombre_entidad=="No Definido") #No hay valores con "No Definido"
     sum(is.na(BaseDatos$nombre_entidad)) # No hay valores nulos
     table(BaseDatos$nombre_entidad)
-  } #6. Nombre de la entidadd
+  } #6. Nombre de la entidad
   {
     BaseDatos[c(1:15), "nit_entidad"]
     sum(BaseDatos$nit_entidad=="No Definido") #No hay valores con "No Definido"
@@ -241,22 +466,22 @@ BaseDatos[grep("8000065831",BaseDatos$id_contratista),
     sum(is.na(BaseDatos$id_adjudicacion)) # No hay valores nulos
   } #33. ID Ajudicacion
   {
-  --#62. TipoInden_Contratista
-      BaseDatos[c(1:15), "TipoInden_Contratista"]
-      sum(is.na(BaseDatos$TipoInden_Contratista)) # No hay valores nulos
-      table(BaseDatos$TipoInden_Contratista)
+  --#62. TipoIden_Contratista
+      BaseDatos[c(1:15), "tipo_id_contratista_2"]
+      sum(is.na(BaseDatos$tipo_id_contratista_2)) # No hay valores nulos
+      table(BaseDatos$tipo_id_contratista_2)
   } #34. Tipo Identifi del Contratista*
   {
-    BaseDatos[c(954686:954750),c("TipoInden_Contratista","Identificacion del Contratista","id_contratista")]
+    BaseDatos[c(954686:954750),c("tipo_id_contratista_2","id_contratista","id_contratista_2")]
   --#63. Inden_Contratista    
-      BaseDatos[c(1:100),id_contratista]
-      sum(is.na(BaseDatos$id_contratista)) # No hay valores nulos
+      BaseDatos[c(1:100),id_contratista_2]
+      sum(is.na(BaseDatos$id_contratista_2)) # No hay valores nulos
   } #35. Identificacion del Contratista*
   {
   --#64. nom_contratista
-      BaseDatos[c(1:15), nom_contratista]
-      sum(is.na(BaseDatos$nom_contratista)) # No hay valores nulos
-      table(BaseDatos$nom_contratista)
+      BaseDatos[c(1:15), nom_contratista_2]
+      sum(is.na(BaseDatos$nom_contratista_2)) # No hay valores nulos
+      table(BaseDatos$nom_contratista_2)
    } #36. Nom Raz Social Contratista 
   {
       BaseDatos[c(1:15), "departamento_contratista"]
@@ -413,231 +638,8 @@ BaseDatos[grep("8000065831",BaseDatos$id_contratista),
   BaseDatos[c(955793)]
   tables()
 }
-
-#MODIFICACIONES DE LA BASE DE DATOS-----
-
-#Ordenar
-  BaseDatos <- BaseDatos[order(id_contratista)]
-
-#General
-
-  BaseDatos <- distinct(BaseDatos)
-  nombres = c("uid","a?o_cargue","a?o_firma","nivel_entidad","orden_entidad",
-            "nombre_entidad","nit_entidad","cod_entidad","id_tipo_proceso",
-            "tipo_proceso","estado_proceso","causal_cont_direct","id_reg_contrat",
-            "regimen_contratacion","id_objeto","objeto_contratar","detalle_objeto",
-            "tipo_contrato","municipio_obtencion","municipio_entrega",
-            "municipio_ejecucion","fecha_cargue","numero_constancia","numero_proceso",
-            "numero_contrato","valor_estimado","id_grupo","nombre_grupo","id_familia",
-            "nombre_familia","id_clase","nombre_clase","id_adjudicacion",
-            "id_contratista","nom_contratista","departamento_contratista",
-            "tipo_id_rep_legal","id_rep_legal","nombre_rep_legal","fecha_firma",
-            "fecha_ini_ejec","plazo_ejec","rango_ejec","adiciones_dias","adiciones_meses",
-            "fecha_fin_ejec","compromiso_presupuestal","valor_inicial","valor_adiciones",
-            "valor_total","objeto_contrato_firma","id_origen_recursos","origen_recursos",
-            "codigo_bpin","proponentes_selecc","calificacion_definitiva","id_sub_unid_ejec",
-            "nombre_sub_unid_ejec","moneda","post_conflicto","ruta_web")
-  names(BaseDatos) <- nombres
-
-
-
-#Conversi?n de variables
-  
-  #2. a?o_cargue
-  #Se retiran los registros que presenten que el a?o del cargue es mayor al a?o de firma
-  BaseDatos <- BaseDatos %>% filter(!(a?o_cargue > a?o_firma))
-  
-  #Eliminaci?n de los datos anteriores al a?o 2014 y los que no contienen la mayoria de datos
-  BaseDatos <- BaseDatos[ a?o_cargue >= 2014 &
-                          a?o_firma >= 2014]
-  
-  #3. a?o_firma
-  #Se retiran los registros que presenten a?o de forma nulo
-  BaseDatos <- BaseDatos %>% filter(!(is.na(a?o_firma)))
-  
-  #4. nivel_entidad
-    BaseDatos[, nivel_entidad_2:= ifelse(nivel_entidad== "NACIONAL", "N", "T")]
-    BaseDatos[, nivel_entidad_2:= factor(nivel_entidad_2)]
-  
-  #5. orden_entidad
-   for (i in 1:1105606){
-     BaseDatos[i, orden_entidad_2:= switch(orden_entidad, 
-                                     "NACIONAL CENTRALIZADO" = "NC",
-                                     "NACIONAL DESCENTRALIZADO" = "ND",
-                                     "TERRITORIAL DEPARTAMENTAL CENTRALIZADO" = "TDC",
-                                     "TERRITORIAL DEPARTAMENTAL DESCENTRALIZADO" = "TDD",
-                                     "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 1" = "TDMN1",
-                                     "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 2" = "TDMN2",
-                                     "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 3" = "TDMN3",
-                                     "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 4" = "TDMN4",
-                                     "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 5" = "TDMN5",
-                                     "TERRITORIAL DISTRITAL MUNICIPAL NIVEL 6" = "TDMN6")]}
-    BaseDatos[, orden_entidad_2:= factor(orden_entidad_2)]
-    
-  #9. id Tipo de proceso
-    BaseDatos[ , id_tipo_proceso:= factor(id_tipo_proceso)]
-    
-  #10. Tipo de Proceso
-    BaseDatos[ , Tipo de Proceso:= factor(Tipo de Proceso)]
-  
-  #11. Estado del Proceso
-    BaseDatos[ , estado_proceso:= factor(estado_proceso)]
-    
-  #13. ID Regimen de Contratacion
-    BaseDatos[ , id_reg_contrat:= factor(id_reg_contrat)]
-  
-  #14. Regimen de Contratacion
-    BaseDatos[ , regimen_contratacion:= factor(regimen_contratacion)]
-  
-  #15. ID Objeto a Contratar
-    BaseDatos[ , id_objeto:= factor(id_objeto)]
-    
-  #16. Objeto a Contratar
-    BaseDatos[ , objeto_contratar:= factor(objeto_contratar)]
-  
-  #17. detalle_objeto
-    # Se retiran los datos que presenten la observaci?n de anuar esfuerzos o similares
-    BaseDatos <-  BaseDatos %>%
-      filter(!(str_detect(str_to_lower(detalle_objeto),"aunar esfuerzos") |
-                 str_detect(str_to_lower(detalle_objeto),"anuar esfuerzos") |
-                 str_detect(str_to_lower(detalle_objeto),"aunar espuerzos")))
-    # Se retiran los datos que presenten la observaci?n de empr?stitos
-    BaseDatos <-  BaseDatos %>%
-      filter(!(str_detect(str_to_lower(detalle_objeto),"empr?stito") |
-                 str_detect(str_to_lower(detalle_objeto),"emprestito") |
-                 str_detect(str_to_lower(detalle_objeto),"empresito")))
-  
-  #18. tipo_contrato
-  # Se retiran los contratos de tipo 'cr?dito', 'Fiducia', 'Comodato' y 'Arrendamiento'
-    BaseDatos$tipo_contrato <- as.factor(BaseDatos$tipo_contrato)
-    BaseDatos <- BaseDatos %>% 
-      filter(!(tipo_contrato == "Cr?dito" | tipo_contrato == "Fiducia" | 
-                 tipo_contrato == "Comodato" | tipo_contrato == "Arrendamiento"))
-  
-  #26. ID Grupo
-    BaseDatos[ , id_grupo:= as.character(id_grupo)]
-    
-  #27. Nombre Grupo
-    BaseDatos[ , nombre_grupo:= factor(nombre_grupo)]
-    
-  #34. Tipo Identifi del Contratista*
-    BaseDatos[,TipoInden_Contratista := ifelse(Tipo Identifi del Contratista == "No Definido",NA,
-                                               Tipo Identifi del Contratista)] #NA
-    BaseDatos[ , TipoInden_Contratista:= factor(TipoInden_Contratista)]
-    
-  #35. Identificacion del Contratista
-    BaseDatos[,id_contratista:= ifelse(Identificacion del Contratista=="No Definido",NA,
-                                          Identificacion del Contratista)]
-    BaseDatos[, id_contratista:= gsub(":","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("\\$","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("\\.","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("?","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("?","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("?","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("?","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("/","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("|","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= as.numeric(id_contratista)]
-    
-    #??AVISO!! Primero se necesita ordenar los datos por Iden_Contratista y tranformarlos en caracteres
-    BaseDatos <- BaseDatos[order(id_contratista)]
-    BaseDatos[, id_contratista:= as.character(id_contratista)]
-    BaseDatos[c(955677:955793),id_contratista:= ifelse(Identificacion del Contratista=="No Definido",NA,
-                                          Identificacion del Contratista)]
-    
-    for (j in 835590:955793){
-      if(!is.na(BaseDatos[j, id_contratista])){
-        
-        x <- BaseDatos[j, strsplit(id_contratista, split = '-') ]
-        y <- limpiarNumero(x)
-      
-        if (y == "Invalido"){
-          x <- BaseDatos[j, strsplit(id_contratista, split = ' ') ]
-          y <- limpiarNumero(x)
-        }
-        if (y == "Invalido"){
-          x <- BaseDatos[j, strsplit(id_contratista, split = 'd') ]
-          y <- limpiarNumero(x)
-        }
-        if (y == "Invalido"){
-          x <- BaseDatos[j, strsplit(id_contratista, split = 'D') ]
-          y <- limpiarNumero(x)
-        }
-        BaseDatos[j, id_contratista:= y]
-      }
-    }
-    
-    #El ?ltimo grupo que tiene probemas es porque hay espacios entre los n?meros
-    BaseDatos[, id_contratista:= gsub(" ","", BaseDatos$id_contratista)]
-    BaseDatos[, id_contratista:= gsub("-","", BaseDatos$id_contratista)]
-    
-    # Resmen de los valores da?ados
-    valorresIncorrectos <- BaseDatos[grep("Invalido",BaseDatos$id_contratista), 
-              c( "Identificacion del Contratista", "nom_contratista")]
-    
-    valorresIncorrectos <- BaseDatos[c(955677:955793),
-                                     c("TipoInden_Contratista","Identificacion del Contratista", "id_contratista")]
-    BaseDatos[is.na(id_contratista), sum(valor_total)]
-
-    
-  #36. Nom Raz Social Contratista
-    BaseDatos[,nom_contratista:= ifelse(Nom Raz Social Contratista=="No Definido",NA,
-                                        Nom Raz Social Contratista)]
-    
-  #38. Tipo Doc Representante Legal
-    BaseDatos[ , tipo_id_rep_legal:= factor(tipo_id_rep_legal)]
-  
-  #42. fecha_ini_ejec
-    BaseDatos$fecha_ini_ejec <- dmy(BaseDatos$fecha_ini_ejec)
-  
-  #43. plazo_ejec
-    BaseDatos$plazo_ejec <- as.integer(BaseDatos$plazo_ejec)
-  
-  #44. Rango de Ejec del Contrato
-    BaseDatos[ , rango_ejec:= factor(rango_ejec)]
-    
-  #47. fecha_fin_ejec
-    BaseDatos$fecha_fin_ejec <- dmy(BaseDatos$fecha_fin_ejec)
-    
-  #53. ID Origen de los Recursos
-    BaseDatos[ , id_origen_recursos:= factor(id_origen_recursos)]
-    
-  #54. Origen de los Recursos
-    BaseDatos[ , origen_recursos:= factor(origen_recursos)]
-  
-  #60. moneda
-    
-    #Eliminaci?n de los datos anteriores al a?o 2014 y los que no contienen la mayoria de datos
-    BaseDatos <- BaseDatos[moneda %in% c("Pesos (COP)", "D?lares (US)")]
-    # Adicionalmente, se eliminan los datos que tienen valores menores a los 10 mil pesos colombianos
-    BaseDatos <- BaseDatos[!(moneda == "Pesos (COP)" &
-                               valor_inicial <= 10000 | 
-                               valor_total < 10000)]
-    # Adicionalmente, se eliminan los datos que tienen valores menores a los 10 dolares
-    BaseDatos <- BaseDatos[!(moneda == "D?lares (US)" &
-                               valor_inicial <= 10 | 
-                               valor_total < 10)]
-    
-  #--67. plazo_ejec_calc
-    BaseDatos$plazo_ejec_calc <- BaseDatos$fecha_fin_ejec - BaseDatos$fecha_ini_ejec
-    BaseDatos$plazo_ejec_calc <- as.integer(BaseDatos$plazo_ejec_calc)
-    
-    # Se retiran los datos que no sean coherentes en el plazo de ejecuci?n
-    BaseDatos <- BaseDatos %>% filter(!is.na(plazo_ejec_calc)) 
-    
-  #--68. plazo_ejec_dias
-    BaseDatos <- data.table(BaseDatos)
-
-    BaseDatos[,plazo_ejec_dias := ifelse(
-        rango_ejec == "D", plazo_ejec, 
-        ifelse(rango_ejec == "M", plazo_ejec*30, NA
-      ))]
-  
-    #Eliminaci?n de columnas
-    BaseDatos$V1 <- NULL #Variable generada automaticamente
-    BaseDatos$Tipo Identifi del Contratista <- NULL
     
 # Comentario    
-  nom_contratista <- BaseDatos %>% group_by(id_contratista) %>% summarise(Dist = n_distinct(nom_contratista))
+  nom_contratista_2 <- BaseDatos %>% group_by(id_contratista_2) %>% summarise(Dist = n_distinct(nom_contratista_2))
   
 #github
