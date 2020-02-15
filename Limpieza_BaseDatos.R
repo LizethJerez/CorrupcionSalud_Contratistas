@@ -159,7 +159,7 @@ BaseDatos[, id_contratista_2:= as.numeric(id_contratista_2)]
 #??AVISO!! Primero se necesita ordenar los datos por Iden_Contratista y tranformarlos en caracteres
 BaseDatos <- BaseDatos[order(id_contratista_2)]
 BaseDatos[, id_contratista_2:= as.character(id_contratista_2)]
-BaseDatos[c(955677:955793),id_contratista_2:= ifelse(id_contratista=="No Definido",NA,
+BaseDatos[c(835590:955793),id_contratista_2:= ifelse(id_contratista=="No Definido",NA,
                                                      id_contratista)]
 
 for (j in 835590:955793){
