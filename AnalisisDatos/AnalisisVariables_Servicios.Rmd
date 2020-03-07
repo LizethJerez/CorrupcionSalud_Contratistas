@@ -1,0 +1,107 @@
+---
+title: "Análisis de Indicadores con Importancia Economica"
+author: "Lizeth Jerez y Nicolas Arrieta"
+date: "22/2/2020"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+## Lectura BD
+
+```{r warning=FALSE, error=FALSE}
+library(tidyverse)
+library(DT)
+```
+
+```{r}
+BaseDatos <- read.csv(file = "SECOP_I_Correlacion.CSV", stringsAsFactors = FALSE)
+BaseDatos$servicios_gestion <- BaseDatos$objeto_contratar == 
+                            "Servicios de Gestion, Servicios Profesionales de Empresa y Servicios Administrativos" 
+```
+
+
+## Creacion de variables por departamento
+
+```{r}
+variablesMunicipio <- BaseDatos %>% group_by(servicios_gestion,municipio_ejecucion_2) %>% 
+  summarise(numero_contratos = n(), 
+            numero_entidades = n_distinct(nit_entidad),
+            numero_contratistas = n_distinct(id_contratista_2),
+            grado_importancia = mean(grado_importancia_economica),
+            valor_agregado = mean(valor_agregado),
+            peso_relatico_municipal = mean(peso_relatico_municipal))
+
+datatable(variablesMunicipio)
+```
+
+
+```{r}
+indice_IHH_frec_Mun <- BaseDatos %>%
+      group_by(servicios_gestion, municipio_ejecucion_2, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(servicios_gestion, municipio_ejecucion_2) %>% 
+      mutate(total_municipio = sum(total),
+         indice_municipio = ((total/total_municipio)*100)^2) %>% 
+      group_by(servicios_gestion, municipio_ejecucion_2) %>% 
+      summarise(IHH_frecuencia = sum(indice_municipio))
+
+```
+
+
+```{r}
+
+indice_IHH_valor_Mun <- BaseDatos %>%
+      group_by(servicios_gestion, municipio_ejecucion_2, id_contratista_2) %>%
+      summarise(total = sum(valor_total)) %>% 
+      group_by(servicios_gestion, municipio_ejecucion_2) %>% 
+      mutate(total_municipio = sum(total),
+         indice_municipio = ((total/total_municipio)*100)^2) %>% 
+      group_by(servicios_gestion, municipio_ejecucion_2) %>% 
+      summarise(IHH_valor = sum(indice_municipio))
+```
+
+```{r}
+variablesMunicipio <- merge(x = variablesMunicipio, y = indice_IHH_frec_Mun, 
+                            by.x = c("municipio_ejecucion_2", "servicios_gestion"),
+                                by.y = c("municipio_ejecucion_2", "servicios_gestion"))
+
+variablesMunicipio <- merge(x = variablesMunicipio, y = indice_IHH_valor_Mun, 
+                            by.x = c("municipio_ejecucion_2", "servicios_gestion"),
+                                by.y = c("municipio_ejecucion_2", "servicios_gestion"))
+```
+
+```{r}
+indice_DN_frec_Mun <- BaseDatos %>%
+      group_by(servicios_gestion, municipio_ejecucion_2, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(servicios_gestion, municipio_ejecucion_2) %>% 
+      mutate(total_municipio = sum(total),
+         indice_municipio = total*(total-1)) %>% 
+      group_by(servicios_gestion, municipio_ejecucion_2) %>% 
+      summarise(DN = sum(indice_municipio)/(mean(total_municipio)*(mean(total_municipio)-1)))
+
+variablesMunicipio <- merge(x = variablesMunicipio, y = indice_DN_frec_Mun, 
+                            by.x = c("municipio_ejecucion_2", "servicios_gestion"),
+                            by.y = c("municipio_ejecucion_2", "servicios_gestion"))
+```
+
+## Resultado
+
+```{r}
+datatable(variablesMunicipio)
+#write.csv(x = variablesMunicipio, file = "IndicadoresMunicipios.csv")
+```
+
+
+```{r}
+variablesMunicipio <- variablesMunicipio %>% filter(numero_contratos > 2)
+ggplot(data = variablesMunicipio, 
+       aes(y = IHH_valor, x= log(numero_entidades), color = servicios_gestion))  + geom_point()
+```
+
+```{r}
+variablesMunicipio %>% filter(IHH_valor > 500 && numero_contratos > 50)
+```
+

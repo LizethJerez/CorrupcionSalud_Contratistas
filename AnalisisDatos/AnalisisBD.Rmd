@@ -1,0 +1,295 @@
+---
+title: "Analisis de Datos"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Librerias
+library(ggplot2)
+library(data.table)
+library(tidyverse)
+library(bit64)
+library(DT)
+```
+
+```{r}
+#Lectura de la Base de Datos
+BaseDatos <- fread("SECOP_I_IPS_Depurada.CSV")
+```
+
+# I. ANALISIS DE DATOS
+
+```{r}
+General <- fread("C:\\Users\\nico2\\Documents\\Academico\\Proyecto_CorrupcionSalud\\CorrupcionSalud_Contratistas\\General.CSV")
+ResumenFamilias <- fread("C:\\Users\\nico2\\Documents\\Academico\\Proyecto_CorrupcionSalud\\CorrupcionSalud_Contratistas\\ResumenFamilias.CSV")
+
+datatable(General)
+```
+```{r}
+datatable(ResumenFamilias)
+
+```
+
+Se arman grupos de empresas por medio de los cuartiles de los valores totales
+
+
+
+
+## Distribución de los contratistas por departamento
+
+Existen dos atributos que tienen en cuenta los departamentos, el primero es por el lugar de ejecución y otro es por el lugar del contratista.
+
+El primer análisis es por el departamento de ejecución
+```{r}
+ContxDto <- BaseDatos[, list(num_contratistas = n_distinct(id_contratista_2), valor_contratos= sum(valor_total)/1e+12) ,
+                      by = departamento_ejecucion]
+datatable(ContxDto)
+```
+
+```{r}
+ggplot(data = ContxDto, aes(x = num_contratistas, y = valor_contratos)) + geom_point(col = "coral1") +
+  xlab("número de contratistas") +
+  ylab("billones de pesos") 
+  #ggtitle("Relación número de contratistas vs valor de contratos por departamento")
+```
+
+En este caso podemos resaltar  cosas:
+- Antioquia es el lugar con mayor numero de contratos y numero e contratistas, en gran distancia
+- Bogotá es lugar donde la relacion de contratos y contratistas es diferente, ya que este lugar se "sale" de la tendencia, y se dirige más para los contratistas. esto puede traducirse de que hay más competencia
+- Los lugares con mayor relevancia son: Antioquia, Bogotá, Nariño, Cundinamarca, y santander
+
+Se presenta el mismo resultado por parte de los departamentos de los contratistas
+
+```{r}
+ContxDto <- BaseDatos[, list(contratistas = n_distinct(id_contratista_2), Contratos= sum(valor_total)) ,
+                      by = departamento_contratista]
+datatable (ContxDto)
+```
+
+```{r}
+ggplot(data = ContxDto, aes(x = contratistas, y = Contratos)) + geom_point()
+```
+
+De nuevo se realiza el mismo análisis pero con respecto a los productos
+
+```{r}
+ContxFam <- BaseDatos[,list(contratistas = n_distinct(id_contratista_2), Contratos= sum(valor_total)/1e+12) ,
+                      by = nombre_familia ]
+ContxFam <- ContxFam[nombre_familia != "No Definido"]
+datatable(ContxFam)
+```
+
+```{r}
+ggplot(data = ContxFam, aes(x = contratistas, y = Contratos)) + geom_point(col = "cadetblue4") +
+  xlab("número de contratistas") +
+  ylab("billones de pesos") 
+  #ggtitle("Relación número de contratistas vs valor de contratos por familia")
+```
+
+
+## Regimen de contratación
+### 1.1 Cantidad de contratos anuales
+```{r}
+ggplot(data = BaseDatos, aes(fill = regimen_contratacion ,anno_firma)) + geom_bar() +
+  ggtitle("Número de contratos por regimen de contratación")
+
+```
+### 1.2 Valor de contratos anuales
+```{r}
+ggplot(data = BaseDatos, aes(fill = regimen_contratacion , x = anno_firma, y = valor_total)) +
+  geom_bar(position = "stack", stat = "identity") + ggtitle("Valor de contratos por regimen de contratación")
+```
+
+## 2. Grupos de los productos
+### 2.1 Cantidad de contratos anuales
+```{r}
+ggplot(data = BaseDatos, aes(fill = nombre_grupo, x = anno_firma)) +
+  geom_bar() + ggtitle("Número de contratos por grupo")
+```
+
+### 2.2 Valor de contratos anuales
+```{r}
+ggplot(data = BaseDatos, aes(fill = nombre_grupo, x = anno_firma, y = valor_total)) +
+  geom_bar(position = "fill", stat = "identity") + ggtitle("Valor de contratos por grupo")
+```
+## 3. Tipo de proceso
+### 3.1. Cantidad de contratos anuales
+```{r}
+ggplot(data = BaseDatos, aes(fill = tipo_proceso, x = anno_firma)) +
+  geom_bar() + ggtitle("Número de contratos por tipo de proceso")
+
+```
+### 3.2. Cantidad de contratos anuales
+```{r}
+ggplot(data = BaseDatos, aes(fill = tipo_proceso, x = anno_firma, y = valor_total)) +
+  geom_bar(position = "fill", stat = "identity") + ggtitle("Valor de contratos por tipo de proceso")
+
+```
+
+
+# Indicadores
+
+## Indicador 1: Cantidad de contratistas que suministran un producto o servicio
+
+Tabla de datos
+```{r}
+NContFamil <- BaseDatos %>% group_by(nombre_familia) %>% 
+ # filter(!(nombre_grupo == "[F] Servicios")) %>%
+  filter(!(nombre_familia == "No Definido")) %>%
+    summarise(frecuencia = n(), dist_contratistas = n_distinct(id_contratista),
+    suma = sum(valor_total), proporcion = dist_contratistas/frecuencia)
+NContFamil %>% datatable()
+```
+
+
+Resumen estadístico
+```{r}
+summary(NContFamil$proporcion)
+```
+
+Histigrama
+```{r}
+hist(NContFamil$proporcion )
+```
+
+## Indicador 2: Indice IHH
+### IHH por familias
+
+Tabla de datos por número de datos
+```{r}
+indice_IHH_frec <- BaseDatos %>%
+      group_by(nombre_familia, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(nombre_familia) %>% 
+      mutate(total_familia = sum(total),
+         indice_por_familia = ((total/total_familia)*100)^2) %>% 
+      group_by(nombre_familia) %>% 
+      summarise(IHH = sum(indice_por_familia), frecuencia = n())%>%
+      filter(frecuencia > 2)
+indice_IHH_frec %>% datatable
+```
+
+Histograma por número de datos
+```{r}
+hist(indice_IHH_frec$IHH, 
+     main = "Histograma por número de registros",
+    xlab = "Indice IHH", ylab = "Frecuencia", breaks = 20, col = "coral1")
+```
+
+Tabla de datos por valor de datos
+```{r}
+indice_IHH_valor <- BaseDatos %>%
+      group_by(nombre_familia, id_contratista_2) %>%
+      summarise(total = sum(valor_total)) %>% 
+      group_by(nombre_familia) %>% 
+      mutate(total_familia = sum(total),
+         indice_por_familia = ((total/total_familia)*100)^2) %>% 
+      group_by(nombre_familia) %>% 
+      summarise(IHH = sum(indice_por_familia), frecuencia = n()) %>%
+      filter(frecuencia > 1)
+
+indice_IHH_valor %>% datatable()
+```
+
+Histograma por valor de datos
+```{r}
+hist(indice_IHH_valor$IHH, 
+     main = "Histograma por valor de registros",
+    xlab = "Indice IHH", ylab = "Frecuencia", breaks = 20, col = "cadetblue3")
+```
+
+Resumen estadístico
+```{r}
+summary(indice_IHH_frec$IHH)
+summary(indice_IHH_valor$IHH)
+```
+### IHH por municipios
+
+Tabla de datos por número de datos
+```{r}
+indice_IHH_frec <- BaseDatos %>%
+      group_by(municipio_ejecucion, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(municipio_ejecucion) %>% 
+      mutate(total_familia = sum(total),
+         indice_por_familia = ((total/total_familia)*100)^2) %>% 
+      group_by(municipio_ejecucion) %>% 
+      summarise(IHH = sum(indice_por_familia), frecuencia = n())%>%
+      filter(frecuencia >1)
+indice_IHH_frec %>% datatable()
+```
+
+Histograma por número de datos
+```{r}
+hist(indice_IHH_frec$IHH, 
+     main = "Histograma por número de registros",
+    xlab = "Indice IHH", ylab = "Frecuencia", breaks = 28, col = "coral1")
+```
+
+Tabla de datos por valor
+```{r}
+indice_IHH_valor <- BaseDatos %>%
+      group_by(municipio_ejecucion, id_contratista_2) %>%
+      summarise(total = sum(valor_total)) %>% 
+      group_by(municipio_ejecucion) %>% 
+      mutate(total_familia = sum(total),
+         indice_por_familia = ((total/total_familia)*100)^2) %>% 
+      group_by(municipio_ejecucion) %>% 
+      summarise(IHH = sum(indice_por_familia), frecuencia = n())%>%
+      filter(frecuencia >1)
+  indice_IHH_valor %>% datatable()
+```
+
+```{r}
+hist(indice_IHH_valor$IHH, 
+     main = "Histograma por valor de registros",
+    xlab = "Indice IHH", ylab = "Frecuencia", breaks = 20, col = "cadetblue3")
+```
+
+Resumen estadístico
+```{r}
+summary(indice_IHH_frec$IHH)
+summary(indice_IHH_valor$IHH)
+```
+
+Análisis detallado en la licitacion
+
+Tabla de datos por número de datos
+```{r}
+indice_IHH_frec <- BaseDatos %>%
+      group_by(nombre_familia, id_contratista_2) %>%
+      filter(tipo_proceso == "Licitación Pública") %>%
+      summarise(total = n()) %>% 
+      group_by(nombre_familia) %>% 
+      mutate(total_familia = sum(total),
+         indice_por_familia = ((total/total_familia)*100)^2) %>% 
+      group_by(nombre_familia) %>% 
+      summarise(IHH = sum(indice_por_familia), frecuencia = n())%>%
+      filter(frecuencia >1)
+indice_IHH_frec %>% datatable
+```
+
+Diferencia entre procesos abiertos
+Por año
+
+```{r}
+indice_IHH_frec <- BaseDatos %>%
+      group_by(anno_firma, id_contratista_2, nombre_familia) %>%
+  filter(anno_firma != "No definido") %>%
+      summarise(total = n()) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      mutate(total_familia = sum(total),
+         indice_por_familia = ((total/total_familia)*100)^2) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      summarise(IHH = sum(indice_por_familia), frecuencia = n()) %>%
+  filter(frecuencia > 50 & IHH > 1000)
+indice_IHH_frec %>% datatable
+```
+
+```{r}
+ggplot(data = indice_IHH_frec, aes(x = anno_firma,y = IHH, color = nombre_familia)) + geom_point() +
+  xlab("año de firma") +
+  ylab("Indice IHH")
+```
+
