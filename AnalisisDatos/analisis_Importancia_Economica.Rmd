@@ -208,7 +208,7 @@ BaseDatos <- merge(x = BaseDatos,
 ### Exportacion BD SECOP
 
 ```{r}
-#write.csv(x = BaseDatos, file = "SECOP_I_Correlacion.csv")
+write.csv(x = BaseDatos, file = "SECOP_I_A1.csv")
 ```
 
 # Resultado

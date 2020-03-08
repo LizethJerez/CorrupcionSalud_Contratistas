@@ -13,11 +13,10 @@ output:
 ```{r warning=FALSE, error=FALSE}
 library(tidyverse)
 library(DT)
-library(GGally)
 ```
 
 ```{r}
-BaseDatos <- read.csv(file = "SECOP_I_Correlacion.CSV", stringsAsFactors = FALSE)
+BaseDatos <- read.csv(file = "SECOP_I_A1.CSV", stringsAsFactors = FALSE)
 ```
 
 
@@ -42,7 +41,7 @@ indice_IHH_frec_Mun <- BaseDatos %>%
       summarise(total = n()) %>% 
       group_by(anno_firma, municipio_ejecucion_2) %>% 
       mutate(total_municipio = sum(total),
-         indice_municipio = ((total/total_municipio))^2) %>% 
+         indice_municipio = ((total/total_municipio)*100)^2) %>% 
       group_by(anno_firma, municipio_ejecucion_2) %>% 
       summarise(IHH_frecuencia = sum(indice_municipio))
 ```
@@ -55,16 +54,18 @@ indice_IHH_valor_Mun <- BaseDatos %>%
       summarise(total = sum(valor_total)) %>% 
       group_by(anno_firma, municipio_ejecucion_2) %>% 
       mutate(total_municipio = sum(total),
-         indice_municipio = ((total/total_municipio))^2) %>% 
+         indice_municipio = ((total/total_municipio)*100)^2) %>% 
       group_by(anno_firma, municipio_ejecucion_2) %>% 
       summarise(IHH_valor = sum(indice_municipio))
 ```
 
 ```{r}
-variablesMunicipio <- merge(x = variablesMunicipio, y = indice_IHH_frec_Mun, by.x = c("anno_firma", "municipio_ejecucion_2"),
+variablesMunicipio <- merge(x = variablesMunicipio, y = indice_IHH_frec_Mun, 
+                            by.x = c("anno_firma","municipio_ejecucion_2"),
                                 by.y = c("anno_firma", "municipio_ejecucion_2"))
 
-variablesMunicipio <- merge(x = variablesMunicipio, y = indice_IHH_valor_Mun, by.x = c("anno_firma","municipio_ejecucion_2"),
+variablesMunicipio <- merge(x = variablesMunicipio, y = indice_IHH_valor_Mun, 
+                            by.x = c("anno_firma","municipio_ejecucion_2"),
                                 by.y = c("anno_firma", "municipio_ejecucion_2"))
 ```
 
@@ -100,30 +101,47 @@ ggplot(data = variablesMunicipio, aes(x = log(valor_agregado), y = log(IHH_frecu
 ```
 
 ```{r}
-ggplot(data = variablesMunicipio, aes(x = factor(grado_importancia), y = IHH_frecuencia, color = anno_firma)) + geom_boxplot()
+correlacion_valorAgregado <- variablesMunicipio %>% group_by(municipio_ejecucion_2) %>% 
+  summarize(prom_IHH_anual_frec = mean(IHH_frecuencia),
+            prom_IHH_anual_valor = mean(IHH_valor),
+            valor_agregado = mean(valor_agregado),
+            numero_anual_contratistas = mean(numero_contratistas),
+            grado_importancia = mean(grado_importancia))
+
+correlacion_valorAgregado[correlacion_valorAgregado$municipio_ejecucion_2 == "colombia-todoelpais",
+                          c("valor_agregado", "grado_importancia")] <-     c(mean(correlacion_valorAgregado$valor_agregado, na.rm = TRUE),0)
+
+ggplot(data = correlacion_valorAgregado, 
+       aes(x = log(valor_agregado), y = log(prom_IHH_anual_frec))) + geom_point()
+
+cor(log(correlacion_valorAgregado$valor_agregado), log(correlacion_valorAgregado$prom_IHH_anual_frec), 
+    method = "pearson")
 ```
 
-En este caso existe una posible relacion
-
-
 ```{r}
-v1 <- variablesMunicipio %>% filter(!is.na(valor_agregado))
-modelo1 <- lm(log(IHH_frecuencia)~log(valor_agregado), data=v1) 
+modelo1 <- lm(log(prom_IHH_anual_frec)~log(valor_agregado)*log(numero_anual_contratistas),
+              data = correlacion_valorAgregado) 
 summary(modelo1)
 ```
 
 ```{r}
-ggplot(data = variablesMunicipio, aes(x = log(numero_contratos), y = log(IHH_frecuencia), color = anno_firma)) + geom_point()
-```
-
-
-```{r}
-modelo2 <- lm(log(IHH_frecuencia)~log(numero_contratistas)*log(numero_contratos), data=variablesMunicipio) 
-summary(modelo2)
+tapply(correlacion_valorAgregado$prom_IHH_anual_frec,
+       correlacion_valorAgregado$grado_importancia, FUN = summary)
 ```
 
 ```{r}
-
-ggpairs(datos, lower = list(continuous = "smooth"),
-        diag = list(continuous = "bar"), axisLabels = "none")
+tapply(correlacion_valorAgregado$prom_IHH_anual_valor,
+       correlacion_valorAgregado$grado_importancia, FUN = summary)
 ```
+
+TOP 10
+
+```{r}
+correlacion_valorAgregado <- correlacion_valorAgregado %>% mutate(puntaje = prom_IHH_anual_frec*0.25 +
+                                                                    prom_IHH_anual_valor*0.25 +
+                                                                    0.25*valor_agregado/1000 + 
+                                                                    0.25*numero_anual_contratistas) %>%
+                                                            arrange(desc(puntaje))
+head(correlacion_valorAgregado, 10)
+```
+

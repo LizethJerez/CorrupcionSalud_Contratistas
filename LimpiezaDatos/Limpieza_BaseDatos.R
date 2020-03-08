@@ -310,22 +310,22 @@ BaseDatos$tipo_id_contratista <- NULL
 
 #71 Diferencia entre el valor incial y el valor final
 
-BaseDatos <- BaseDatos %>% mutate(diferencia_valor = valor_total/valor_inicial) %>% arrange(desc(diferencia_valor))
+  BaseDatos <- BaseDatos %>% mutate(diferencia_valor = valor_total/valor_inicial) %>% arrange(desc(diferencia_valor))
 
 # Ajuste de los contratos manualmente
-# registro uid # 17-4-5993973-5459503
-BaseDatos[1, "valor_inicial"] <- 60000000
-BaseDatos[1, "valor_total"] <- 60000000 + 102132638
+  # registro uid # 17-4-5993973-5459503
+    BaseDatos[1, "valor_inicial"] <- 60000000
+    BaseDatos[1, "valor_total"] <- 60000000 + 102132638
 
-# registro uid # 17-4-6647185-6041995
-BaseDatos[2, "valor_inicial"] <- 530000000
-BaseDatos[2, "valor_total"] <- 530000000
+  # registro uid # 17-4-6647185-6041995
+    BaseDatos[2, "valor_inicial"] <- 530000000
+    BaseDatos[2, "valor_total"] <- 530000000
 
-# registro uid # 17-12-7384105-6717783
-BaseDatos[3, "valor_inicial"] <- 2109000
-BaseDatos[3, "valor_total"] <- 8538773
+  # registro uid # 17-12-7384105-6717783
+    BaseDatos[3, "valor_inicial"] <- 2109000
+    BaseDatos[3, "valor_total"] <- 8538773
 
-BaseDatos <- BaseDatos %>% filter(!(diferencia_valor > 5 & valor_total > 1E8))
+  BaseDatos <- BaseDatos %>% filter(!(diferencia_valor > 5 & valor_total > 1E8))
 
 #INFORMACION DE LOS DATOS----
 {
