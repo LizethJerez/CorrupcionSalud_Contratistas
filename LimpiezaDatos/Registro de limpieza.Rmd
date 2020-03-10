@@ -1,0 +1,260 @@
+---
+title: "Limpieza Base datos"
+author: "Lizeth Jerez, Nicolas Arrieta"
+date: "9/3/2020"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(plotly)
+library(DT)
+```
+
+
+# Registros eliminados
+
+Lectura de datos
+
+```{r}
+BaseDatos <- read.csv("SECOP_I_IPS.csv",
+                   encoding = "UTF-8", stringsAsFactors = FALSE, sep = ";")
+
+nombres = c("uid","anno_cargue","anno_firma","nivel_entidad","orden_entidad",
+            "nombre_entidad","nit_entidad","cod_entidad","id_tipo_proceso",
+            "tipo_proceso","estado_proceso","causal_cont_direct","id_reg_contrat",
+            "regimen_contratacion","id_objeto","objeto_contratar","detalle_objeto",
+            "tipo_contrato","municipio_obtencion","municipio_entrega",
+            "municipio_ejecucion","fecha_cargue","numero_constancia","numero_proceso",
+            "numero_contrato","valor_estimado","id_grupo","nombre_grupo","id_familia",
+            "nombre_familia","id_clase","nombre_clase","id_adjudicacion","tipo_id_contratista",
+            "id_contratista","nom_contratista","departamento_contratista",
+            "tipo_id_rep_legal","id_rep_legal","nombre_rep_legal","fecha_firma",
+            "fecha_ini_ejec","plazo_ejec","rango_ejec","adiciones_dias","adiciones_meses",
+            "fecha_fin_ejec","compromiso_presupuestal","valor_inicial","valor_adiciones",
+            "valor_total","objeto_contrato_firma","id_origen_recursos","origen_recursos",
+            "codigo_bpin","proponentes_selecc","calificacion_definitiva","id_sub_unid_ejec",
+            "nombre_sub_unid_ejec","moneda","post_conflicto","ruta_web")
+names(BaseDatos) <- nombres
+```
+
+Registros iguales
+
+```{r}
+nrow(BaseDatos) - nrow(distinct(BaseDatos))
+```
+Registros con anno de cargue menor a anno de firma
+
+```{r}
+nrow(BaseDatos) - nrow(BaseDatos %>% filter(!(anno_cargue > anno_firma)))
+```
+
+Anno de cargue y firma mayor al 2014
+
+```{r}
+nrow(BaseDatos) - nrow(BaseDatos %>% filter(anno_cargue >= 2014 &
+                                    anno_firma >= 2014))
+```
+
+anno de firma vacio
+
+```{r}
+nrow(BaseDatos) - nrow(BaseDatos %>% filter(!(is.na(anno_firma))))
+```
+
+Contratos con observacion de anuar esfuerzos
+
+```{r}
+nrow(BaseDatos) - nrow(BaseDatos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"aunar esfuerzos") |
+             str_detect(str_to_lower(detalle_objeto),"anuar esfuerzos") |
+             str_detect(str_to_lower(detalle_objeto),"aunar espuerzos"))))
+```
+
+Contratos con observacion de empresito
+
+```{r}
+nrow(BaseDatos) - nrow(BaseDatos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"empréstito") |
+             str_detect(str_to_lower(detalle_objeto),"emprestito") |
+             str_detect(str_to_lower(detalle_objeto),"empresito"))))
+```
+
+Contratos de 'crédito', 'Fiducia', 'Comodato' y 'Arrendamiento'
+
+```{r}
+nrow(BaseDatos) - nrow(BaseDatos %>% 
+       filter(!(tipo_contrato == "Crédito" | tipo_contrato == "Fiducia" | 
+             tipo_contrato == "Comodato" | tipo_contrato == "Arrendamiento")))
+```
+
+Eliminacion 
+
+Inicialmente hay `r nrow(BaseDatos)`
+
+```{r}
+BaseDatos <- BaseDatos %>% filter(!(anno_cargue > anno_firma))
+```
+
+numero de registros: `r nrow(BaseDatos)`
+
+```{r}
+BaseDatos <- BaseDatos %>% filter(anno_cargue >= 2014 &
+                                    anno_firma >= 2014)
+```
+
+numero de registros: `r nrow(BaseDatos)`
+
+```{r}
+BaseDatos <- BaseDatos %>% filter(!(is.na(anno_firma)))
+```
+
+numero de registros: `r nrow(BaseDatos)`
+
+```{r}
+BaseDatos <-  BaseDatos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"aunar esfuerzos") |
+             str_detect(str_to_lower(detalle_objeto),"anuar esfuerzos") |
+             str_detect(str_to_lower(detalle_objeto),"aunar espuerzos")))
+```
+
+numero de registros: `r nrow(BaseDatos)`
+
+```{r}
+BaseDatos <-  BaseDatos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"empréstito") |
+             str_detect(str_to_lower(detalle_objeto),"emprestito") |
+             str_detect(str_to_lower(detalle_objeto),"empresito")))
+```
+
+numero de registros: `r nrow(BaseDatos)`
+
+```{r}
+BaseDatos$tipo_contrato <- as.factor(BaseDatos$tipo_contrato)
+BaseDatos <- BaseDatos %>% 
+  filter(!(tipo_contrato == "Crédito" | tipo_contrato == "Fiducia" | 
+             tipo_contrato == "Comodato" | tipo_contrato == "Arrendamiento"))
+```
+
+numero de registros: `r nrow(BaseDatos)`
+
+# Reporte de registros
+
+Plazos de ejecucion
+
+```{r}
+BaseDatos$fecha_ini_ejec <- dmy(BaseDatos$fecha_ini_ejec)
+BaseDatos$fecha_fin_ejec <- dmy(BaseDatos$fecha_fin_ejec)
+BaseDatos$plazo_ejec_calc <- BaseDatos$fecha_fin_ejec - BaseDatos$fecha_ini_ejec
+BaseDatos$plazo_ejec_calc <- as.integer(BaseDatos$plazo_ejec_calc)
+```
+
+Plazos de ejecucion erroneos: `r sum(is.na(BaseDatos$plazo_ejec_calc))`
+
+```{r}
+BaseDatos <- BaseDatos %>% filter(!is.na(plazo_ejec_calc))
+```
+
+total registros: `r nrow(BaseDatos)`
+
+Eliminar registros con sin moneda registrada y menores a 10 mil pesos y 10 dólares
+
+```{r}
+BaseDatos <- BaseDatos %>% filter(moneda %in% c("Pesos (COP)", "Dolares (US)"))
+# Adicionalmente, se eliminan los datos que tienen valores menores a los 10 mil pesos colombianos
+BaseDatos <- BaseDatos %>% filter(!(moneda == "Pesos (COP)" &
+                           valor_inicial <= 10000 | 
+                           valor_total < 10000))
+# Adicionalmente, se eliminan los datos que tienen valores menores a los 10 dolares
+BaseDatos <- BaseDatos %>% filter(!(moneda == "Dolares (US)" &
+                           valor_inicial <= 10 | 
+                           valor_total < 10))
+```
+
+total registros: `r nrow(BaseDatos)`
+
+```{r}
+BaseDatos <- BaseDatos %>% arrange(valor_inicial)
+```
+
+Existen 7088 registros con valores menor a los 50k pesos
+
+```{r}
+nrow(BaseDatos %>% filter((moneda == "Pesos (COP)" &
+                            valor_inicial <= 50000 | 
+                            valor_total < 50000)))
+```
+
+Cambio de registro 
+
+```{r}
+BaseDatos <- BaseDatos %>% mutate(diferencia_valor = valor_total/valor_inicial) %>% arrange(desc(diferencia_valor))
+
+# Ajuste de los contratos manualmente
+  # registro uid # 17-4-5993973-5459503
+    BaseDatos[BaseDatos$uid == "17-4-5993973-5459503", "valor_inicial"] <- 60000000
+    BaseDatos[BaseDatos$uid == "17-4-5993973-5459503", "valor_total"] <- 60000000 + 102132638
+
+  # registro uid # 17-4-6647185-6041995
+    BaseDatos[BaseDatos$uid == "17-4-6647185-6041995", "valor_inicial"] <- 530000000
+    BaseDatos[BaseDatos$uid == "17-4-6647185-6041995", "valor_total"] <- 530000000
+
+  # registro uid # 17-12-7384105-6717783
+    BaseDatos[BaseDatos$uid == "17-12-7384105-6717783", "valor_inicial"] <- 2109000
+    BaseDatos[BaseDatos$uid == "17-12-7384105-6717783", "valor_total"] <- 8538773
+    
+nrow(BaseDatos %>% filter((diferencia_valor > 5 & valor_total > 1E8)))
+```
+
+Retiro de los 97 registros
+
+```{r}
+BaseDatos <- BaseDatos %>% filter(!(diferencia_valor > 5 & valor_total > 1E8))
+```
+
+Contratistas actuales
+
+```{r}
+nrow(BaseDatos %>% group_by(id_contratista) %>% summarise(frecuencia= n()))
+```
+Inicialmente hay 204 668 contratistas registrados
+
+Hay un valor extranno al final de los documentos
+
+```{r}
+tail(BaseDatos$valor_total)
+
+BaseDatos[BaseDatos$uid == "17-4-7112778-6507335", 
+          c("valor_inicial", "valor_adiciones", "valor_total")] <- c(1E9,0,1E9)
+```
+
+Adiciones en tiempo
+
+REgistros igual a un dia de ejecucion
+
+```{r}
+BaseDatos <- BaseDatos %>% arrange(plazo_ejec)
+nrow(BaseDatos %>% filter(plazo_ejec==0))
+```
+
+Registros mayor a 
+
+```{r}
+summary(BaseDatos$plazo_ejec)
+nrow(BaseDatos %>% filter(plazo_ejec==0))
+```
+
+```{r}
+quantile(BaseDatos$plazo_ejec, probs = c(0.9,0.95, 0.98, 0.99))
+
+tail(BaseDatos$plazo_ejec,200)
+
+```
+
+
+```{r}
+BaseDatos %>% filter(plazo_ejec == 4410)
+```
+
+

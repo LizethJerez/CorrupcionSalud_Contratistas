@@ -1,0 +1,90 @@
+---
+title: "Analisis de Indicadores con Educacion superior"
+author: "Lizeth Jerez, Nicolas Arrieta"
+date: "4/3/2020"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include = FALSE, warning = FALSE, error = FALSE}
+    knitr::opts_chunk$set(echo = TRUE)
+    library(tidyverse)
+    library(stringdist)
+    library(DT)
+```
+
+# Carga de Base Datos
+
+Importación de ambas  tablas
+
+```{r}
+BaseDatos <- read.csv(file = "SECOP_I_IPS_Depurada.csv", 
+                  sep = ",", 
+                  stringsAsFactors = FALSE)
+
+std_educacion_superior <- read.csv("estadisticas_educacion_basica.csv", 
+                                  encoding = "UTF-8", 
+                                  sep = ",", 
+                                  stringsAsFactors = FALSE)
+```
+
+## Ajuste de la tabla std_educacion_superior
+
+```{r}
+names(std_educacion_superior) <- c("anno", "codigo_municipio",
+                                  "nombre_municipio", "codigo_departamento", 
+                                  "departamento", "codigo_etc",
+                                  "etc", "poblacion", "tasa_matricula", "cobertura_neta",
+                                  "cobertura_neta_transicion", "cobertura_neta_primaria",
+                                  "cobertura_neta_secundaria", "cobertura_neta_media",
+                                  "cobertura_bruta", "cobertura_bruta_transicion",
+                                  "cobertura_bruta_primaria","cobertura_bruta_secundaria",
+                                  "cobertura_bruta_media", "tamanno_promedio_grupo",
+                                  "sedes_conectadas_internet", "desercion", "desercion_transicion",
+                                  "desercion_primaria","desercion_secundaria",
+                                  "desercion_media", "aprobacion", "aprobacion_transicion",
+                                  "aprobacion_primaria","aprobacion_secundaria",
+                                  "aprobacion_media", "reprobacion", "reprobacion_transicion",
+                                  "reprobacion_primaria","reprobacion_secundaria",
+                                  "reprobacion_media", "repitencia", "repitencia_transicion",
+                                  "repitencia_primaria","repitencia_secundaria",
+                                  "repitencia_media")
+
+#Eliminación de los últimos registros vacios
+std_educacion_superior <- std_educacion_superior %>% filter(!is.na(std_educacion_superior$cobertura_neta))
+
+# Seleccion de los annos posteriores al 2014
+std_educacion_superior <- std_educacion_superior %>% filter(anno > 2013)
+```
+
+Promedio de la cobertura neta anual
+
+```{r}
+cobertura_neta_anual <- std_educacion_superior %>% group_by(codigo_municipio) %>% 
+        summarise(cobertura_neta = mean(cobertura_neta), 
+                  cobertura_bruta = mean(cobertura_bruta),
+                  tasa_matricula = mean(tasa_matricula))
+```
+
+# Unión de la información en IE a SECOP
+
+```{r}
+BaseDatos <- merge(x = BaseDatos,
+                   y = cobertura_neta_anual,
+                   by = "codigo_municipio",
+                   all.x = TRUE)
+```
+
+### Exportacion BD SECOP
+
+```{r}
+write.csv(x = BaseDatos, file = "SECOP_I_A1.csv")
+```
+
+# Resultado
+
+```{r}
+datatable(municipios_SI)
+```

@@ -13,10 +13,16 @@ output:
 ```{r warning=FALSE, error=FALSE}
 library(tidyverse)
 library(DT)
+library(sp)
+library(RColorBrewer)
+library(maptools)
+library(scales)
+library(rgdal)
+library(lubridate)
 ```
 
 ```{r}
-BaseDatos <- read.csv(file = "SECOP_I_A1.CSV", stringsAsFactors = FALSE)
+BaseDatos <- read.csv(file = "AnalisisDatos\\SECOP_I_A1.CSV", stringsAsFactors = FALSE)
 ```
 
 
@@ -29,9 +35,16 @@ variablesMunicipio <- BaseDatos %>% group_by(anno_firma, municipio_ejecucion_2) 
             numero_contratistas = n_distinct(id_contratista_2),
             grado_importancia = mean(grado_importancia_economica),
             valor_agregado = mean(valor_agregado),
-            peso_relatico_municipal = mean(peso_relatico_municipal))
+            peso_relatico_municipal = mean(peso_relatico_municipal),
+            cobertura_neta = mean(cobertura_neta),
+            cobertura_bruta = mean(cobertura_bruta),
+            tasa_matricula = mean(tasa_matricula),
+            contratos_cerrados = sum(proceso_abierto),
+            contratos_adicion = sum(adicion))
 
-datatable(variablesMunicipio)
+variablesMunicipio$contratos_cerrados <- 1 - variablesMunicipio$contratos_cerrados/variablesMunicipio$numero_contratos
+
+variablesMunicipio$contratos_adicion <- variablesMunicipio$contratos_adicion/variablesMunicipio$numero_contratos
 ```
 
 
@@ -91,8 +104,19 @@ variablesMunicipio <- variablesMunicipio %>% arrange(grado_importancia, desc(IHH
 ## Resultado
 
 ```{r}
-datatable(variablesMunicipio)
-# write.csv(x = variablesMunicipio, file = "IndicadoresMunicipios.csv")
+ResumenMuni <- variablesMunicipio %>% group_by(grado_importancia) %>% 
+  summarize(porcentaje_contratos_cerrado_media = mean(contratos_cerrados),
+            porcentaje_contratos_cerrado_mediana = median(contratos_cerrados),
+            porcentaje_contratos_adicion_media = mean(contratos_adicion), 
+            porcentaje_contratos_adicion_mediana =median(contratos_adicion),
+            entidades_media = mean(numero_entidades), 
+            entidades_mediana = median(numero_entidades),
+            contratistas_media = mean(numero_contratistas),
+            contratistas_mediana = median(numero_contratistas),
+            contratos_media = mean(numero_contratos),
+            contratos_mediana = median(numero_contratos))
+
+write.csv(ResumenMuni, "ResumenMuni.csv")
 ```
 
 
@@ -106,27 +130,44 @@ correlacion_valorAgregado <- variablesMunicipio %>% group_by(municipio_ejecucion
             prom_IHH_anual_valor = mean(IHH_valor),
             valor_agregado = mean(valor_agregado),
             numero_anual_contratistas = mean(numero_contratistas),
-            grado_importancia = mean(grado_importancia))
+            grado_importancia = mean(grado_importancia),
+            contratos_cerrados = mean(contratos_cerrados),
+            contratos_adicion = mean(contratos_adicion),
+            cobertura_neta = mean(cobertura_neta),
+            cobertura_bruta = mean(cobertura_bruta))
 
 correlacion_valorAgregado[correlacion_valorAgregado$municipio_ejecucion_2 == "colombia-todoelpais",
                           c("valor_agregado", "grado_importancia")] <-     c(mean(correlacion_valorAgregado$valor_agregado, na.rm = TRUE),0)
 
-ggplot(data = correlacion_valorAgregado, 
-       aes(x = log(valor_agregado), y = log(prom_IHH_anual_frec))) + geom_point()
+p1 <- ggplot(data = correlacion_valorAgregado, 
+       aes(x = log(valor_agregado), y = log(prom_IHH_anual_frec), color = log(cobertura_neta))) + stat_smooth(method=lm) + geom_point()
+
+p1 <- p1 + labs(x = "valor agregado",
+                y = "indice IHH frecuecia",
+                colour = "grado imp.")
 
 cor(log(correlacion_valorAgregado$valor_agregado), log(correlacion_valorAgregado$prom_IHH_anual_frec), 
     method = "pearson")
 ```
 
 ```{r}
-modelo1 <- lm(log(prom_IHH_anual_frec)~log(valor_agregado)*log(numero_anual_contratistas),
+p1
+```
+
+```{r}
+ggsave(plot = p1, "Relacion_ValorAgregado_IHH.png", device = "png")
+```
+
+
+```{r}
+modelo1 <- lm(log(prom_IHH_anual_frec)~log(valor_agregado),
               data = correlacion_valorAgregado) 
 summary(modelo1)
 ```
 
 ```{r}
-tapply(correlacion_valorAgregado$prom_IHH_anual_frec,
-       correlacion_valorAgregado$grado_importancia, FUN = summary)
+tapply(variablesMunicipio$contratos_cerrados,
+       variablesMunicipio$anno_firma, FUN = summary)
 ```
 
 ```{r}
@@ -134,14 +175,74 @@ tapply(correlacion_valorAgregado$prom_IHH_anual_valor,
        correlacion_valorAgregado$grado_importancia, FUN = summary)
 ```
 
+```{r}
+hist(x = variablesMunicipio$contratos_cerrados, breaks = 40)
+```
+
+
 TOP 10
 
 ```{r}
-correlacion_valorAgregado <- correlacion_valorAgregado %>% mutate(puntaje = prom_IHH_anual_frec*0.25 +
-                                                                    prom_IHH_anual_valor*0.25 +
-                                                                    0.25*valor_agregado/1000 + 
-                                                                    0.25*numero_anual_contratistas) %>%
-                                                            arrange(desc(puntaje))
+correlacion_valorAgregado <- correlacion_valorAgregado %>% 
+  mutate(puntaje = prom_IHH_anual_frec/max(correlacion_valorAgregado$prom_IHH_anual_frec)*0.25 +
+                   prom_IHH_anual_valor/max(correlacion_valorAgregado$prom_IHH_anual_valor)*0.25 +
+                   contratos_cerrados*0.25 +
+                   contratos_adicion*0.25) %>%
+            arrange(desc(puntaje))
+
 head(correlacion_valorAgregado, 10)
+
+for (i in 1:772) {
+correlacion_valorAgregado[i, "departamento"] <- 
+  {x <- strsplit(as.character(correlacion_valorAgregado[i ,"municipio_ejecucion_2"]), "-"); x[[1]][1]}
+}
+
+IHH_municipio <- correlacion_valorAgregado %>% group_by(departamento) %>% 
+  summarise(IHH_fre =mean(prom_IHH_anual_frec), 
+            IHH_valor = mean(prom_IHH_anual_valor), 
+            puntaje_total = mean(puntaje))
+```
+
+# Mapa
+
+```{r}
+IHH_municipio <- IHH_municipio %>% arrange(departamento)
+# Agregar las atenciones de Bogotá a Cundinamarca
+
+
+IHH_municipio[5, "departamento"] <- "cundinamarca"
+
+IHH_municipio <- IHH_municipio %>% group_by(departamento) %>%
+  summarise(IHH_fre = mean(IHH_fre),
+            IHH_valor = mean(IHH_valor),
+            puntaje_total = mean(puntaje_total))
+
+IHH_municipio <- IHH_municipio %>% arrange(departamento)
+
+IHH_municipio[31:32,] <- c(0,0,0,0)
+
+IHH_municipio$id <- c(0:31)
+```
+
+```{r}
+# Leer información geografica
+ohsCol2 <- readOGR("Col_Adm_1/COL_adm1.shp")
+```
+
+```{r}
+ohsColI2 <- fortify(ohsCol2)
+```
+
+```{r}
+mapa <- merge(ohsColI2, IHH_municipio, by = "id")
+mapColDep1 <- ggplot() +
+geom_polygon(data=mapa, aes(x=long, y=lat, group = group,
+fill = log(Atenciones)), colour ="black", size = 0.1) +
+labs(title = "Colombia", fill = "") +
+labs(x="",y="",title="Log(Atenciones) en el año 2012") +
+scale_x_continuous(limits=c(-80,-65))+
+scale_y_continuous(limits=c(-5,13))
+
+ggplotly(mapColDep1)
 ```
 

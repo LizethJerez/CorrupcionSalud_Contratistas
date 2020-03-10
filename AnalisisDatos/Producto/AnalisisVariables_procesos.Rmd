@@ -1,0 +1,120 @@
+---
+title: "Análisis de Indicadores por producto"
+author: "Lizeth Jerez y Nicolas Arrieta"
+date: "22/2/2020"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+## Lectura BD
+
+```{r warning=FALSE, error=FALSE}
+library(tidyverse)
+library(DT)
+```
+
+```{r}
+BaseDatos <- read.csv(file = "SECOP_I_Correlacion.CSV", stringsAsFactors = FALSE)
+BaseDatos$proceso_abierto <- BaseDatos$tipo_proceso != "Contratación Directa (Ley 1150 de 2007)"
+BaseDatos$adicion <- (BaseDatos$plazo_ejec_dias != BaseDatos$plazo_total) | (BaseDatos$valor_adiciones > 0)
+```
+
+
+## Creacion de variables por departamento
+
+```{r}
+variablesFamilia <- BaseDatos %>% group_by(proceso_abierto, nombre_familia) %>% 
+  summarise(numero_contratos = n(), 
+            numero_entidades = n_distinct(nit_entidad),
+            numero_contratistas = n_distinct(id_contratista_2),
+            numero_procesos= n_distinct(tipo_proceso),
+            numero_municipios= n_distinct(municipio_ejecucion_2),
+            contratos_adiciones = sum(adicion))
+
+variablesFamilia$contratos_adiciones <- variablesFamilia$contratos_adiciones/variablesFamilia$numero_contratos
+
+datatable(variablesFamilia)
+```
+
+
+```{r}
+indice_IHH_frec_Prd <- BaseDatos %>%
+      group_by(proceso_abierto, nombre_familia, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(proceso_abierto, nombre_familia) %>% 
+      mutate(total_proceso = sum(total),
+         indice_municipio = ((total/total_proceso)*100)^2) %>% 
+      group_by(proceso_abierto, nombre_familia) %>% 
+      summarise(IHH_frecuencia = sum(indice_municipio))
+```
+
+
+```{r}
+
+indice_IHH_valor_Prd <- BaseDatos %>%
+      group_by(proceso_abierto, nombre_familia, id_contratista_2) %>%
+      summarise(total = sum(valor_total)) %>% 
+      group_by(proceso_abierto, nombre_familia) %>% 
+      mutate(total_proceso = sum(total),
+         indice_municipio = ((total/total_proceso)*100)^2) %>% 
+      group_by(proceso_abierto, nombre_familia) %>% 
+      summarise(IHH_valor = sum(indice_municipio))
+```
+
+```{r}
+variablesFamilia <- merge(x = variablesFamilia, y = indice_IHH_frec_Prd, 
+                            by.x = c("proceso_abierto","nombre_familia"),
+                                by.y = c("proceso_abierto","nombre_familia"))
+
+variablesFamilia <- merge(x = variablesFamilia, y = indice_IHH_valor_Prd, 
+                            by.x = c("proceso_abierto","nombre_familia"),
+                                by.y = c("proceso_abierto","nombre_familia"))
+```
+
+```{r}
+indice_DN_frec_Prd <- BaseDatos %>%
+      group_by(proceso_abierto, nombre_familia, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(proceso_abierto, nombre_familia) %>% 
+      mutate(total_producto = sum(total),
+         indice_producto = total*(total-1)) %>% 
+      group_by(proceso_abierto, nombre_familia) %>% 
+      summarise(DN = sum(indice_producto)/(mean(total_producto)*(mean(total_producto)-1)))
+
+variablesFamilia <- merge(x = variablesFamilia, y = indice_DN_frec_Prd, 
+                          by.x = c("proceso_abierto","nombre_familia"),
+                                by.y = c("proceso_abierto","nombre_familia"))
+variablesFamilia <- variablesFamilia %>% filter(numero_contratos>= 10 & numero_contratistas < 15000)
+```
+
+## Resultado
+
+```{r}
+datatable(variablesMunicipio)
+#write.csv(x = variablesMunicipio, file = "IndicadoresMunicipios.csv")
+```
+
+### Correlaciones
+
+```{r}
+ggplot(data = variablesFamilia, 
+       aes(x = numero_contratistas, y = log(contratos_adiciones), color = proceso_abierto)) + geom_point()
+```
+
+```{r}
+v1 <- variablesFamilia %>% filter(proceso_abierto) %>% select(contratos_adiciones)
+hist(x = v1$contratos_adiciones,  breaks = 28)
+```
+
+```{r}
+v1 <- variablesFamilia %>% filter(!proceso_abierto) %>% select(contratos_adiciones)
+hist(x = v1$contratos_adiciones,  breaks = 28)
+```
+
+```{r}
+ggplot(data = variablesFamilia, 
+       aes(x = log(numero_contratistas), y = log(DN), color = proceso_abierto)) + geom_point()
+```
+

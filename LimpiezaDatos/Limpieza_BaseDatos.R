@@ -10,8 +10,8 @@ library(lubridate)
 library(plotly)
 library(DT)
 #LECTURA DE ARCHIVOS----
-BaseDatos <- read.csv("SECOP_I_IPS.CSV",
-                   encoding = "UTF-8")   #GENERAL
+BaseDatos <- read.csv("LimpiezaDatos\\SECOP_I_IPS.CSV",
+                   encoding = "UTF-8", stringsAsFactors = FALSE, sep = ";")   #GENERAL
 
 #FUNCIONES----
 limpiarNumero <- function(bloques){
@@ -61,8 +61,8 @@ names(BaseDatos) <- nombres
 BaseDatos <- BaseDatos %>% filter(!(anno_cargue > anno_firma))
 
 #EliminaciOn de los datos anteriores al anno 2014 y los que no contienen la mayoria de datos
-BaseDatos <- BaseDatos[ anno_cargue >= 2014 &
-                          anno_firma >= 2014]
+BaseDatos <- BaseDatos %>% filter(anno_cargue >= 2014 &
+                                    anno_firma >= 2014)
 
 #3. anno_firma
 #Se retiran los registros que presenten anno de forma nulo
@@ -116,7 +116,7 @@ BaseDatos <-  BaseDatos %>%
              str_detect(str_to_lower(detalle_objeto),"aunar espuerzos")))
 # Se retiran los datos que presenten la observaci?n de empr?stitos
 BaseDatos <-  BaseDatos %>%
-  filter(!(str_detect(str_to_lower(detalle_objeto),"empr?stito") |
+  filter(!(str_detect(str_to_lower(detalle_objeto),"empréstito") |
              str_detect(str_to_lower(detalle_objeto),"emprestito") |
              str_detect(str_to_lower(detalle_objeto),"empresito")))
 
@@ -124,7 +124,7 @@ BaseDatos <-  BaseDatos %>%
 # Se retiran los contratos de tipo 'cr?dito', 'Fiducia', 'Comodato' y 'Arrendamiento'
 BaseDatos$tipo_contrato <- as.factor(BaseDatos$tipo_contrato)
 BaseDatos <- BaseDatos %>% 
-  filter(!(tipo_contrato == "Cr?dito" | tipo_contrato == "Fiducia" | 
+  filter(!(tipo_contrato == "Crédito" | tipo_contrato == "Fiducia" | 
              tipo_contrato == "Comodato" | tipo_contrato == "Arrendamiento"))
 
 
@@ -249,12 +249,12 @@ BaseDatos$plazo_ejec_calc <- as.integer(BaseDatos$plazo_ejec_calc)
 BaseDatos <- BaseDatos %>% filter(!is.na(plazo_ejec_calc)) 
 
 #--68. plazo_ejec_dias
-BaseDatos <- data.table(BaseDatos)
 
-BaseDatos[,plazo_ejec_dias := ifelse(
-  rango_ejec == "D", plazo_ejec, 
-  ifelse(rango_ejec == "M", plazo_ejec*30, NA
-  ))]
+BaseDatos <- BaseDatos %>% mutate(plazo_ejec_dias = ifelse(rango_ejec == "D", plazo_ejec, plazo_ejec*30))
+
+#68* plazo total de ejecucion
+
+BaseDatos <- BaseDatos %>% mutate(plazo_total= plazo_ejec_dias + adiciones_dias + adiciones_meses*30)
 
 #69. Departamento
 BaseDatos[, departamento_ejecucion:= {x <- unlist(strsplit(municipio_ejecucion, split =" - ")); x[1] }]
@@ -314,16 +314,16 @@ BaseDatos$tipo_id_contratista <- NULL
 
 # Ajuste de los contratos manualmente
   # registro uid # 17-4-5993973-5459503
-    BaseDatos[1, "valor_inicial"] <- 60000000
-    BaseDatos[1, "valor_total"] <- 60000000 + 102132638
+    BaseDatos[uid == "17-4-5993973-5459503", "valor_inicial"] <- 60000000
+    BaseDatos[uid == "17-4-5993973-5459503", "valor_total"] <- 60000000 + 102132638
 
   # registro uid # 17-4-6647185-6041995
-    BaseDatos[2, "valor_inicial"] <- 530000000
-    BaseDatos[2, "valor_total"] <- 530000000
+    BaseDatos[uid == "17-4-6647185-6041995", "valor_inicial"] <- 530000000
+    BaseDatos[uid == "17-4-6647185-6041995", "valor_total"] <- 530000000
 
   # registro uid # 17-12-7384105-6717783
-    BaseDatos[3, "valor_inicial"] <- 2109000
-    BaseDatos[3, "valor_total"] <- 8538773
+    BaseDatos[uid == "17-12-7384105-6717783", "valor_inicial"] <- 2109000
+    BaseDatos[uid == "17-12-7384105-6717783", "valor_total"] <- 8538773
 
   BaseDatos <- BaseDatos %>% filter(!(diferencia_valor > 5 & valor_total > 1E8))
 

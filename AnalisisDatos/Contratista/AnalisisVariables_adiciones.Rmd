@@ -1,0 +1,54 @@
+---
+title: "Análisis de Indicadores por producto"
+author: "Lizeth Jerez y Nicolas Arrieta"
+date: "22/2/2020"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+## Lectura BD
+
+```{r warning=FALSE, error=FALSE}
+library(tidyverse)
+library(DT)
+```
+
+```{r}
+BaseDatos <- read.csv(file = "SECOP_I_Correlacion.CSV", stringsAsFactors = FALSE)
+```
+
+
+## Creacion de variables por departamento
+
+```{r}
+variablesAdicion <- BaseDatos %>% group_by(id_contratista_2) %>% 
+  summarise(numero_contratos = n(), 
+            numero_entidades = n_distinct(nit_entidad),
+            porcion_procesos_cerrados = sum(proceso_abierto),
+            porcion_adicion = sum(adicion),
+            numero_municipios= n_distinct(municipio_ejecucion_2),
+            numero_familia = n_distinct(nombre_familia))
+
+variablesAdicion$porcion_procesos_cerrados <- 1 - variablesAdicion$porcion_procesos_cerrados/variablesAdicion$numero_contratos
+
+variablesAdicion$porcion_adicion <- variablesAdicion$porcion_adicion/variablesAdicion$numero_contratos
+
+#datatable(variablesAdicion)
+```
+
+
+```{r}
+consulta_2 <- BaseDatos %>% filter(id_contratista_2 == 1040000000) %>% group_by(nombre_familia, nombre_grupo, nom_contratista, municipio_ejecucion) %>% summarise(numero_contrato = n())
+```
+
+```{r}
+ggplot(data = variablesAdicion, aes(x = log(numero_contratos), y= porcion_adicion)) + geom_point()
+```
+
+
+
+
+
+

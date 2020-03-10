@@ -1,0 +1,121 @@
+---
+title: "Análisis de Indicadores por producto"
+author: "Lizeth Jerez y Nicolas Arrieta"
+date: "22/2/2020"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+## Lectura BD
+
+```{r warning=FALSE, error=FALSE}
+library(tidyverse)
+library(DT)
+```
+
+```{r}
+BaseDatos <- read.csv(file = "SECOP_I_Correlacion.CSV", stringsAsFactors = FALSE)
+BaseDatos$proceso_abierto <- BaseDatos$tipo_proceso != "Contratación Directa (Ley 1150 de 2007)"
+BaseDatos$adicion <- (BaseDatos$plazo_ejec_dias != BaseDatos$plazo_total) | (BaseDatos$valor_adiciones > 0)
+```
+
+
+## Creacion de variables por departamento
+
+```{r}
+variablesAnno <- BaseDatos %>% group_by(anno_firma, nombre_familia) %>% 
+  summarise(numero_contratos = n(), 
+            numero_entidades = n_distinct(nit_entidad),
+            numero_contratistas = n_distinct(id_contratista_2),
+            porcion_procesos_abiertos= sum(proceso_abierto),
+            numero_municipios= n_distinct(municipio_ejecucion_2),
+            contratos_adiciones = sum(adicion))
+
+variablesAnno$contratos_adiciones <- variablesAnno$contratos_adiciones/variablesAnno$numero_contratos
+variablesAnno$porcion_procesos_abiertos <- variablesAnno$porcion_procesos_abiertos/variablesAnno$numero_contratos
+
+datatable(variablesAnno)
+```
+
+
+```{r}
+indice_IHH_frec_Prd <- BaseDatos %>%
+      group_by(anno_firma, nombre_familia, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      mutate(total_proceso = sum(total),
+         indice_municipio = ((total/total_proceso)*100)^2) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      summarise(IHH_frecuencia = sum(indice_municipio))
+```
+
+
+```{r}
+
+indice_IHH_valor_Prd <- BaseDatos %>%
+      group_by(anno_firma, nombre_familia, id_contratista_2) %>%
+      summarise(total = sum(valor_total)) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      mutate(total_proceso = sum(total),
+         indice_municipio = ((total/total_proceso)*100)^2) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      summarise(IHH_valor = sum(indice_municipio))
+```
+
+```{r}
+variablesAnno <- merge(x = variablesAnno, y = indice_IHH_frec_Prd, 
+                            by.x = c("anno_firma","nombre_familia"),
+                                by.y = c("anno_firma","nombre_familia"))
+
+variablesAnno <- merge(x = variablesAnno, y = indice_IHH_valor_Prd, 
+                            by.x = c("anno_firma","nombre_familia"),
+                                by.y = c("anno_firma","nombre_familia"))
+```
+
+```{r}
+indice_DN_frec_Prd <- BaseDatos %>%
+      group_by(anno_firma, nombre_familia, id_contratista_2) %>%
+      summarise(total = n()) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      mutate(total_producto = sum(total),
+         indice_producto = total*(total-1)) %>% 
+      group_by(anno_firma, nombre_familia) %>% 
+      summarise(DN = sum(indice_producto)/(mean(total_producto)*(mean(total_producto)-1)))
+
+variablesAnno <- merge(x = variablesAnno, y = indice_DN_frec_Prd, 
+                          by.x = c("anno_firma","nombre_familia"),
+                                by.y = c("anno_firma","nombre_familia"))
+variablesAnno <- variablesAnno %>% filter(numero_contratos>= 10, nombre_familia != "No Definido")
+```
+
+## Resultado
+
+```{r}
+datatable(variablesAnno)
+#write.csv(x = variablesMunicipio, file = "IndicadoresMunicipios.csv")
+```
+
+### Correlaciones
+
+```{r}
+ggplot(data = variablesAnno, 
+       aes(x = log(numero_contratistas), y = IHH_frecuencia, color = anno_firma)) + geom_point()
+```
+
+```{r}
+v1 <- variablesFamilia %>% filter(proceso_abierto) %>% select(IHH_frecuencia)
+hist(x = v1$IHH_frecuencia,  breaks = 28)
+```
+
+```{r}
+v1 <- variablesFamilia %>% filter(!proceso_abierto) %>% select(IHH_frecuencia)
+hist(x = v1$IHH_frecuencia, breaks = 56)
+```
+
+```{r}
+ggplot(data = variablesFamilia, 
+       aes(x = log(numero_contratistas), y = log(DN), color = proceso_abierto)) + geom_point()
+```
+
