@@ -3,9 +3,7 @@
 #___________________________________________
 
 #LIBRERIAS----
-library(data.table)
 library(tidyverse)
-library(bit64)
 library(lubridate)
 library(plotly)
 library(DT)
@@ -261,33 +259,13 @@ BaseDatos[, departamento_ejecucion:= {x <- unlist(strsplit(municipio_ejecucion, 
 
 #70 municipio_ejecucion_2 - *este atributo contiene la estandarizacion de departamento - municipio
 # Limpieza de datos que contienen más información del depto. y el municipio
-BaseDatos$municipio_ejecucion_2 <- BaseDatos$municipio_ejecucion
-
-for(i in 1:nrow(BaseDatos)){
-  
-  prueba <- BaseDatos[i , "municipio_ejecucion_2"]
-  
-  if(str_detect(prueba, ";")){
-    BaseDatos[i, "municipio_ejecucion_3"] <-  
-       {x <- BaseDatos[i,] %>% select(municipio_ejecucion_2) %>% str_split(";");
-        x[[1]][1]}
+BaseDatos <- BaseDatos %>% rowwise() %>% 
+  mutate(municipio_ejecucion_2 = {  if(str_detect(municipio_ejecucion, ";")){
+    x <- strsplit(municipio_ejecucion, split =";")[[1]][1]
   }
-  if(str_detect(prueba , "/")){
-      BaseDatos[i, "municipio_ejecucion_3"] <-  
-        {x <- BaseDatos[i,] %>% select(municipio_ejecucion_2) %>% str_split("/");
-        x[[1]][1]}
-  }
-  
-}
-
-for(i in 1:nrow(BaseDatos)){
-  
-  if(!is.na(BaseDatos[i, "municipio_ejecucion_3"])){
-    BaseDatos[i, "municipio_ejecucion_2"] <-  BaseDatos[i, "municipio_ejecucion_3"]
-  }
-}
-
-BaseDatos$municipio_ejecucion_3 <- NULL
+    if(str_detect(x , "/")){
+      x <- strsplit(x, split =";")[[1]][1]
+    } ; x})
 
 sum(is.na(BaseDatos$municipio_ejecucion_2))
 

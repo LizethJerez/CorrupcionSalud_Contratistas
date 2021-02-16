@@ -10,6 +10,7 @@ library(tidyverse)
 library(lubridate)
 library(plotly)
 library(DT)
+library(vroom)
 ```
 
 
@@ -18,8 +19,10 @@ library(DT)
 Lectura de datos
 
 ```{r}
-BaseDatos <- read.csv("SECOP_I_IPS.csv",
-                   encoding = "UTF-8", stringsAsFactors = FALSE, sep = ";")
+direccion <- paste0('C:/Users/nico2/Proyectos/contratacion_publica',
+                    "/CorrupcionSalud_Contratistas/Datasets/")
+
+BaseDatos <- vroom(paste0(direccion, "secop_i_ips_limpia_original.csv"))
 
 nombres = c("uid","anno_cargue","anno_firma","nivel_entidad","orden_entidad",
             "nombre_entidad","nit_entidad","cod_entidad","id_tipo_proceso",

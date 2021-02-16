@@ -1,0 +1,369 @@
+---
+title: "Limpieza del conjunto de datos SECOP I"
+author: "Lizeth Jerez y Nicolas Arrieta"
+date: "4/14/2020"
+output:
+  html_document: 
+    df_print: paged
+    code_folding: hide
+    theme: flatly
+    toc: yes
+---
+
+```{r error = FALSE, message = FALSE}
+knitr::opts_chunk$set(message = F, warning = F, fig.align = "center")
+
+# Librerias
+library(tidyverse)
+library(lubridate)
+library(stringdist)
+```
+
+# Conjunto de datos
+
+La base de datos de SECOP I permite conocer en detalle los contratos públicos de Colombia, en este caso se presentan una muestra de 5 mil contratos entre hospitales públicos y empresas o personas. A continuación, se presenta una descripción las categorías en las que se componen los 63 atributos del conjunto de datos seleccionado:
+
+_Contrato_: identificación única del contrato, fecha de realización.
+
+_Entidades_: grado de caracterización de la entidad, nombre e identificación única.
+
+_Procesos_: descripción del tipo de proceso seleccionado.
+
+_Objeto a contratar_: Clasificación del objeto a contratar.
+
+_Contratista_: número de identificación de la empresa o contratista, nombre y lugar de operación.
+
+_Lugar_: Municipio donde se obtiene, entrega y se ejecuta el contrato.
+
+_Valor_: Valor del contrato estimado, acordado y final del contrato.
+
+_Calificación_: Si es un proceso abierto presenta los postulados y el ganador.
+
+_Ruta web_: enlace a los documentos del contrato.
+
+La estructura de los datos es:
+
+```{r}
+datos <- read.csv("contratos_publicos_SECOP_I.CSV",
+                  stringsAsFactors = FALSE)
+
+nombres = c("uid","anno_cargue","anno_firma","nivel_entidad","orden_entidad",
+            "nombre_entidad","nit_entidad","cod_entidad","id_tipo_proceso",
+            "tipo_proceso","estado_proceso","causal_cont_direct","id_reg_contrat",
+            "regimen_contratacion","id_objeto","objeto_contratar","detalle_objeto",
+            "tipo_contrato","municipio_obtencion","municipio_entrega",
+            "municipio_ejecucion","fecha_cargue","numero_constancia","numero_proceso",
+            "numero_contrato","valor_estimado","id_grupo","nombre_grupo","id_familia",
+            "nombre_familia","id_clase","nombre_clase","id_adjudicacion","tipo_id_contratista",
+            "id_contratista","nom_contratista","departamento_contratista",
+            "tipo_id_rep_legal","id_rep_legal","nombre_rep_legal","fecha_firma",
+            "fecha_ini_ejec","plazo_ejec","rango_ejec","adiciones_dias","adiciones_meses",
+            "fecha_fin_ejec","compromiso_presupuestal","valor_inicial","valor_adiciones",
+            "valor_total","objeto_contrato_firma","id_origen_recursos","origen_recursos",
+            "codigo_bpin","proponentes_selecc","calificacion_definitiva","id_sub_unid_ejec",
+            "nombre_sub_unid_ejec","moneda","post_conflicto","ruta_web")
+names(datos) <- nombres
+
+datos <- datos %>% arrange(uid)
+
+str(datos[1, ])
+```
+
+# Problemas relacionados con los atributos String
+
+## Problema 1: Eliminación de registros que contienen palabras específicas en un atributo
+
+>*I. Atributos con Valores específicos*
+
+En la siguiente tabla se observa la frecuencia de contratos por su tipo.
+
+```{r}
+table(datos$tipo_contrato)
+```
+
+Los contratos por crédito, fiducia, comodato y arrendamiento no son de interés para el proyecto, por lo tanto, es necesario eliminarlos del conjunto de datos.	
+
+```{r}
+datos <- datos %>% 
+  filter(!(tipo_contrato %in% c("Crédito", "Fiducia" ,"Comodato","Arrendamiento")))
+#Resultado
+table(datos$tipo_contrato)
+```
+
+>*II. Valores específicos dentro de una cadena de carácteres*
+
+En los siguientes registros se observa una explicación detallada del objeto por la persona que registro el contrato en el SECOP. De igual forma que en el caso anterior, existen registros que no son de interés, si en el detalle de los objetos se aclara que fue por empréstitos o por aunar refuerzos, se puede descartar del conjunto.
+
+```{r}
+#Mostrar el problema
+head(as.character(datos %>% 
+                    filter((
+                      str_detect(str_to_lower(detalle_objeto),"aunar esfuerzos") |
+                      str_detect(str_to_lower(detalle_objeto),"anuar esfuerzos") |
+                      str_detect(str_to_lower(detalle_objeto),"aunar espuerzos"))) %>% 
+                    select(detalle_objeto)))
+
+head(as.character(datos %>% 
+                      filter((str_detect(
+                        str_to_lower(detalle_objeto),"empréstito") |
+                        str_detect(str_to_lower(detalle_objeto),"emprestito") |
+                        str_detect(str_to_lower(detalle_objeto),"empresito"))) %>% 
+                      select(detalle_objeto)))
+# Operación
+datos <-  datos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"aunar esfuerzos") |
+           str_detect(str_to_lower(detalle_objeto),"anuar esfuerzos") |
+           str_detect(str_to_lower(detalle_objeto),"aunar espuerzos")))
+# Se retiran los datos que presenten la observaci?n de empr?stitos
+
+datos <-  datos %>%
+  filter(!(str_detect(str_to_lower(detalle_objeto),"empréstito") |
+          str_detect(str_to_lower(detalle_objeto),"emprestito") |
+          str_detect(str_to_lower(detalle_objeto),"empresito")))
+```
+
+
+## Problema 2: Depuración de strings que contengan caracteres incorrectos
+
+En la identificación de los contratistas se observan registro con caracteres adicionales al número, por ejemplo, puntos, comas y el lugar de expedición del documento.
+
+```{r warning=FALSE}
+datos$id_contratista_2 <- as.numeric(datos$id_contratista)
+head(datos %>% filter(is.na(id_contratista_2), id_contratista != "No Definido") %>% select(id_contratista),10)
+```
+
+La dificultad de este problema radica en que los caracteres están presentes en diferentes partes de los strings, por lo tanto, se utilizó la función _gsub()_ para realizar una limpieza a todos los caracteres que no fueran númericos.
+
+```{r}
+datos$id_contratista_2 <- gsub("[^0-9]", "", datos$id_contratista)
+datos$id_contratista_2 <- as.numeric(datos$id_contratista_2)
+
+head(datos %>% select(id_contratista, id_contratista_2), 20)
+```
+
+## Problema 3. División de atributos que contienen más de una información
+
+El atributo *municipio_ejecucion* presenta dos características de la ubicación de la ejecución del contrato, el departamento y el municipio. En este caso, es necesario separar este atributo para obtener solamente el departamento.
+
+```{r}
+head(datos$municipio_ejecucion)
+```
+
+En este caso, la función strsplit() permite la separación de caracteres con un patrón definido, en el atributo municipio_ejecución se identifica que el patrón es “ - ”.
+
+```{r}
+x <- as.character(datos[1,"municipio_ejecucion"])
+strsplit(x, split =" - ")
+
+```
+
+Debido a que esta función tiene como resultado una lista, se tiene que realizar la anidación siguiente a la función para extraer el carácter del lado izquierdo del guion.
+
+```{r}
+strsplit(x, split =" - ")[[1]][1]
+```
+
+A partir de esto, se puede aplicar en el conjunto de datos, como se puede observar a continuación:
+
+```{r}
+datos <- datos %>% rowwise() %>% 
+  mutate(departamento_ejecucion = strsplit(municipio_ejecucion, split =" - ")[[1]][1])
+
+head(datos %>% select(municipio_ejecucion, departamento_ejecucion))
+```
+
+# Problema 4. Múltiples campos en un solo atributo
+
+En algunos contratos se encuentra que hubo diferentes municipios de ejecución, pero estas variaciones provocan problemas al analizar los comportamientos por municipio. Por lo tanto, es necesario contar con solo un municipio para obtener mejores resultados.
+
+```{r}
+head(datos %>% filter(str_detect(municipio_ejecucion, ";") | str_detect(municipio_ejecucion, "/")) %>%
+  select(municipio_ejecucion), 10)
+```
+
+En este caso observamos nuevamente el uso de las funciones _str_detect_ para identidicar el patrón y _strsplit()_ para dividir el campo, a partir de los patrones “;” y “/”. 
+
+```{r}
+datos <- datos %>% rowwise() %>% 
+  mutate(municipio_ejecucion_2 = { x <- municipio_ejecucion;
+                                    if(str_detect(x, ";")){
+                                      x <- strsplit(x, split =";")[[1]][1]
+                                    }
+                                    if(str_detect(x , "/")){
+                                      x <- strsplit(x, split ="/")[[1]][1]
+                                    } ; x})
+
+head(datos %>% filter(str_detect(municipio_ejecucion, ";") | str_detect(municipio_ejecucion, "/")) %>%
+  select(municipio_ejecucion, municipio_ejecucion_2), 10)
+```
+
+# Problema 5. Unión entre dos tablas con variaciones en los atributos llave
+
+Para la unión entre dos tablas es necesario un atributo que está contenido en ambas tablas, conocido como el atributo llave. Este atributo se presenta frecuentemente como un identificador del registro único, como la cédula de ciudadanía, sin embargo, para este caso es necesario unir la tabla de importancia económica del DANE y la tabla de contratación del SECOP. El único atributo por el cual se puede realizar esta unión es por medio de municipio_ejecucion, pero ya que son caracteres, existen algunas diferencias en la estructura de los atributos que requiere una adecuación antes de la unión. 
+
+La importancia económica categoriza el nivel de importancia de los municipios del país, a partir de la actividad económica de algunos sectores de interés. A continuación se presenta la estructura de los datos:
+
+```{r}
+
+importancia_economica <- read.csv("importancia_economica_municipio.csv", 
+                                  encoding = "UTF-8", 
+                                  sep = ";", 
+                                  stringsAsFactors = FALSE)
+
+names(importancia_economica) <- c("codigo_departamento", "codigo_municipio",
+                                  "nombre_departamento", "nombre_municipio", 
+                                  "grado_importancia_economica", "valor_agregado",
+                                  "peso_relatico_municipal")
+
+importancia_economica <- importancia_economica %>% filter(!is.na(grado_importancia_economica))
+
+str(importancia_economica)
+```
+
+
+En este caso es necesario adaptar los atributos de _nombre_departamento_ y _nombre_municipio_ de la misma forma que esta representado en el conjunto de datos del SECOP.
+
+```{r}
+importancia_economica <- importancia_economica %>% rowwise() %>% 
+  mutate(nombre_municipio_2 = strsplit(nombre_municipio, split = "\\." )[[1]][1])
+
+importancia_economica <- importancia_economica %>% mutate(departamento_municipio =
+                                  paste(nombre_departamento,
+                                        nombre_municipio_2, sep = "-"))
+head(importancia_economica %>% select(nombre_municipio_2, nombre_departamento, departamento_municipio))
+```
+
+Con el fin de obtener la menor variación entre los atributos, se aplicaron diferentes funciones para que todos los caracteres fuera en minúscula, sin acentos, caracteres especiales y espacios. 
+
+```{r}
+
+# Transformar todos los caracteres en minuscula
+importancia_economica$departamento_municipio <- str_to_lower(
+                                                    string = importancia_economica$departamento_municipio)
+
+# Limpieza de datos que contienen más información del depto. y el municipio
+importancia_economica <- importancia_economica %>% rowwise() %>% 
+  mutate(departamento_municipio = { x <- departamento_municipio;
+                                    if(str_detect(x, ";")){
+                                      x <- strsplit(x, split =";")[[1]][1]
+                                    }
+                                    if(str_detect(x , "/")){
+                                      x <- strsplit(x, split ="/")[[1]][1]
+                                    } ; x})
+
+importancia_economica$departamento_municipio <- iconv(importancia_economica$departamento_municipio , 
+                                                      from = "UTF-8",  
+                                                      to = 'ASCII//TRANSLIT')
+#Quitar .
+importancia_economica$departamento_municipio <- gsub(x = importancia_economica$departamento_municipio,
+                                             pattern = "\\.", replacement = "")
+# Quita ( )
+importancia_economica$departamento_municipio <- gsub(x = importancia_economica$departamento_municipio,
+                                             pattern = " ", replacement = "")
+
+head(importancia_economica %>% select(nombre_municipio_2, nombre_departamento, departamento_municipio))
+```
+
+Por otro lado, se realiza el mismo proceso de adecuación para el atributo de _municipio_ejecucion_ del conjunto de datos de SECOP.
+
+```{r}
+datos$municipio_ejecucion_2 <- str_to_lower(string = datos$municipio_ejecucion_2)
+datos$municipio_ejecucion_2 <- iconv(datos$municipio_ejecucion_2 , 
+                                                      from = "UTF-8",  
+                                                      to = 'ASCII//TRANSLIT')
+#Quitar . atributo 70
+datos$municipio_ejecucion_2 <- gsub(x = datos$municipio_ejecucion_2,
+                                                     pattern = "\\.", replacement = "")
+# Quita ( ) atributo 70
+datos$municipio_ejecucion_2 <- gsub(x = datos$municipio_ejecucion_2,
+                                                     pattern = " ", replacement = "")
+
+head(datos %>% select(municipio_ejecucion, municipio_ejecucion_2))
+```
+
+Luego, en la siguiente parte es necesario establecer una manera de encontrar los pares entre cada tabla.  Por lo tanto, se optó por desarrollar un algoritmo que tiene en cuenta la probabilidad en que un string es similar a otro por medio de la ubicación de los caracteres. Debido a que los atributos tenían una estructura similar, el atributo logró emparejar casi todos los registros, solamente hizo falta Bogotá, por la gran diferencia en como aparecen en los diferentes conjuntos de datos y el otro caso fue del valor “todo el país” en el conjunto SECOP, porque no se presentaba este valor en el otro conjunto de datos. 
+
+```{r}
+
+municipios_SI <- datos %>% select(municipio_ejecucion_2) %>% 
+                  distinct()
+
+municipios_SI <- municipios_SI[!is.na(municipios_SI$municipio_ejecucion_2),]
+
+#Algoritmo de emparejamiento
+
+for(i in 1: nrow(municipios_SI)){   
+  
+  # metodo estadistico
+  z <- stringdist(as.character(municipios_SI[i, "municipio_ejecucion_2"]), 
+                  as.character(importancia_economica$departamento_municipio), 
+                  method = "jw", 
+                  p = 0.1)
+  
+  posicion <- which.min(z)
+  
+  if(z[posicion] < 0.15){
+    municipios_SI[i, "valor_emparejamiento"] <- z[posicion]
+    municipios_SI[i, "departamento_municipio"] <- importancia_economica[posicion, "departamento_municipio"]
+    municipios_SI[i, "codigo_municipio"] <- as.character(importancia_economica[posicion, "codigo_municipio"])
+    municipios_SI[i, "codigo_departamento"] <- as.character(
+                                                      importancia_economica[posicion, "codigo_departamento"])
+  } else{
+    municipios_SI[i, "valor_emparejamiento"] <- 1
+    municipios_SI[i, "departamento_municipio"] <- "ninguno"
+    municipios_SI[i, "codigo_municipio"] <- "ninguno"
+    municipios_SI[i, "codigo_departamento"] <- "ninguno"
+  }
+}
+
+head(municipios_SI %>% arrange(desc(valor_emparejamiento)), 20)
+
+```
+
+En los resultados que no se pudo encontrar la llave, es necesario hacer el ajuste manual.
+
+```{r}
+
+  #Bogota
+  municipios_SI[municipios_SI$municipio_ejecucion_2 == "bogotadc-bogotadc", 
+              "codigo_municipio"] <- "11001"
+
+  municipios_SI[municipios_SI$municipio_ejecucion_2 == "bogotadc-bogotadc", 
+               "codigo_departamento"] <- "11"
+
+# Todo el país
+  municipios_SI[municipios_SI$municipio_ejecucion_2 == "colombia-todoelpais", 
+               "codigo_departamento"] <- "1"
+  
+  municipios_SI[municipios_SI$municipio_ejecucion_2 == "colombia-todoelpais", 
+               "codigo_departamento"] <- "1"
+  
+```
+
+Por último, se puede realizar la unión de los conjuntos de datos importancia económica y SECOP por medio del atributo _código_municipio_. Cabe resaltar que este mismo código funciona para los demás conjuntos presentados por el DANE, por lo tanto, es de gran utilidad haber conseguido el emparejamiento, ya el análisis puede complementarse con otras variables disponibles en la plataforma del DANE.
+
+En la siguiete tabla se observa la distribución de los contratos por grado de importancia económica y el nivel de la entidad.
+
+```{r}
+datos <- merge(x = datos,
+                   y = municipios_SI,
+                   by = "municipio_ejecucion_2",
+                   all = TRUE)
+
+#Atributos repetidos en la tabla municipios_SI
+importancia_economica$codigo_departamento <- NULL
+importancia_economica$nombre_departamento <- NULL
+importancia_economica$nombre_municipio <- NULL
+importancia_economica$nombre_municipio_2 <- NULL
+importancia_economica$departamento_municipio <- NULL
+
+datos <- merge(x = datos,
+                   y = importancia_economica,
+                   by = "codigo_municipio",
+                   all.x = TRUE)
+
+table(datos$grado_importancia_economica, datos$nivel_entidad)
+```
+
+
+
